@@ -36,6 +36,7 @@ interface StoreContextType {
   disconnectMNP: () => void;
   updateOrderTracking: (orderId: string, trackingNumber: string, courierName?: string) => void;
   prepareMNPShipmentBooking: (orderId: string, booking: MNPShipmentBooking) => void;
+  changeAdminPassword: (currentPassword: string, newPassword: string) => { success: boolean; message: string };
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -47,6 +48,7 @@ const STORAGE_KEYS = {
   CATEGORIES: 'hzc_categories_v2',
   CART: 'hzc_cart_v2',
   ADMIN_AUTH: 'hzc_admin_auth',
+  ADMIN_PASSWORD: 'hzc_admin_password_v2',
   MNP_CONFIG: 'hzc_mnp_config_v1',
 };
 
@@ -165,6 +167,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return localStorage.getItem(STORAGE_KEYS.ADMIN_AUTH) === 'true';
     } catch {
       return false;
+    }
+  });
+
+  const DEFAULT_ADMIN_PASSWORDS = ['admin123', '03432782295', 'hasnain786'];
+
+  const [customAdminPassword, setCustomAdminPassword] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD);
+    } catch {
+      return null;
     }
   });
 
@@ -294,8 +306,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Admin Actions
   const loginAdmin = (password: string): boolean => {
-    // Standard secure pin for Hasnain Zarri Chappal store admin
-    if (password === 'admin123' || password === '03432782295' || password === 'hasnain786') {
+    const trimmed = password.trim();
+    if (!trimmed) return false;
+
+    // Check against active password (custom changed password or initial defaults)
+    let isMatch = false;
+    if (customAdminPassword) {
+      isMatch = trimmed === customAdminPassword;
+    } else {
+      isMatch = DEFAULT_ADMIN_PASSWORDS.includes(trimmed);
+    }
+
+    if (isMatch) {
       setIsAdmin(true);
       try {
         localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
@@ -314,6 +336,51 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {
       // ignore
     }
+  };
+
+  const changeAdminPassword = (
+    currentPassword: string,
+    newPassword: string
+  ): { success: boolean; message: string } => {
+    const trimmedCurrent = currentPassword.trim();
+    const trimmedNew = newPassword.trim();
+
+    if (!trimmedCurrent) {
+      return { success: false, message: 'Current password is required.' };
+    }
+
+    if (!trimmedNew) {
+      return { success: false, message: 'New password cannot be empty.' };
+    }
+
+    if (trimmedNew.length < 4) {
+      return { success: false, message: 'New password must be at least 4 characters long.' };
+    }
+
+    // Verify current password against active password
+    let isCurrentValid = false;
+    if (customAdminPassword) {
+      isCurrentValid = trimmedCurrent === customAdminPassword;
+    } else {
+      isCurrentValid = DEFAULT_ADMIN_PASSWORDS.includes(trimmedCurrent);
+    }
+
+    if (!isCurrentValid) {
+      return { success: false, message: 'Current password is incorrect. Please verify and try again.' };
+    }
+
+    // Update password
+    setCustomAdminPassword(trimmedNew);
+    try {
+      localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, trimmedNew);
+    } catch {
+      // ignore
+    }
+
+    return {
+      success: true,
+      message: 'Admin password changed successfully! Your new password will be required for the next admin login.',
+    };
   };
 
   // Product CRUD
@@ -469,6 +536,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         disconnectMNP,
         updateOrderTracking,
         prepareMNPShipmentBooking,
+        changeAdminPassword,
       }}
     >
       {children}

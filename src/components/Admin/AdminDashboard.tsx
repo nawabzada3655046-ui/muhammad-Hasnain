@@ -30,6 +30,7 @@ import { Product, Order } from '../../types';
 import { STORE_WHATSAPP_NUMBER, getCustomerStatusWhatsAppUrl } from '../../utils/whatsapp';
 import { MNPCourierIntegration } from './MNPCourierIntegration';
 import { MNPShipmentModal } from './MNPShipmentModal';
+import { AdminSecuritySettings } from './AdminSecuritySettings';
 
 interface AdminDashboardProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
 
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'banners' | 'categories' | 'courier'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'banners' | 'categories' | 'courier' | 'security'>('overview');
 
   // MNP Courier shipment booking state
   const [bookingOrder, setBookingOrder] = useState<Order | null>(null);
@@ -117,7 +118,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     setLoginError('');
     const success = loginAdmin(passwordInput);
     if (!success) {
-      setLoginError('Invalid Passcode. Enter admin passcode (e.g. admin123 or 03432782295)');
+      setLoginError('Invalid password. Please enter your valid admin password.');
     } else {
       setPasswordInput('');
     }
@@ -417,14 +418,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                 <input
                   type="password"
                   required
-                  placeholder="Enter Admin Passcode"
+                  placeholder="Enter Admin Password"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
                   className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-center text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-amber-500 tracking-widest transition-colors font-mono"
                   autoFocus
                 />
                 <span className="text-[10px] text-gray-500 mt-1.5 block">
-                  Quick pin: <code>admin123</code> or <code>03432782295</code>
+                  Protected store administration. Enter your password to unlock the portal.
                 </span>
               </div>
 
@@ -524,6 +525,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                 }`}>
                   {mnpConfig.isConnected ? 'Connected' : 'Not Connected'}
                 </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('security')}
+                className={`py-2 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+                  activeTab === 'security'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-gray-50 text-gray-700 hover:text-gray-900 border border-gray-200'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Admin Settings / Security</span>
               </button>
             </div>
 
@@ -1311,6 +1324,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
             {activeTab === 'courier' && (
               <div className="animate-in fade-in duration-200">
                 <MNPCourierIntegration />
+              </div>
+            )}
+
+            {/* TAB 7: ADMIN SETTINGS / SECURITY */}
+            {activeTab === 'security' && (
+              <div className="animate-in fade-in duration-200">
+                <AdminSecuritySettings onLogout={logoutAdmin} />
               </div>
             )}
 
