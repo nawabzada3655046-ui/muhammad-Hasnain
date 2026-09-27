@@ -1,0 +1,6 @@
+{
+  "name": "Hasnain Zarri Chappal Store",
+  "description": "Premium Zarri Chappal, Peshawari Chappal & Traditional Khussa store with delivery across Pakistan and WhatsApp ordering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
