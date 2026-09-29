@@ -276,8 +276,8 @@ export const MNPCourierIntegration: React.FC = () => {
             </div>
           </div>
 
-          {/* Connection Status Badge */}
-          <div className="flex items-center gap-2">
+          {/* Status */}
+          <div className="flex flex-wrap items-center gap-2.5">
             <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 border font-bold text-xs shadow-sm ${
               mnpConfig.isConnected 
                 ? 'bg-emerald-500/90 text-white border-emerald-400' 

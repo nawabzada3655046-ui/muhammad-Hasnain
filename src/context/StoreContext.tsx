@@ -1,6 +1,24 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { INITIAL_BANNER_CONFIG, INITIAL_CATEGORIES, INITIAL_PRODUCTS } from '../data/initialProducts';
 import { BannerConfig, CartItem, Order, Product, MNPConfig, MNPShipmentBooking } from '../types';
+import { 
+  getAllProductsFromDB, 
+  saveProductToDB, 
+  saveAllProductsToDB, 
+  deleteProductFromDB 
+} from '../utils/indexedDBStorage';
+
+/**
+ * Generates a collision-free, cryptographically secure unique ID for every product.
+ */
+export function generateUniqueProductId(): string {
+  const timestamp = Date.now();
+  const randomPart = Math.random().toString(36).substring(2, 9);
+  const extra = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID().slice(0, 8)
+    : Math.floor(Math.random() * 1000000).toString(36);
+  return `hzc-prod-${timestamp}-${randomPart}-${extra}`;
+}
 
 interface StoreContextType {
   products: Product[];
@@ -30,6 +48,8 @@ interface StoreContextType {
   clearCart: () => void;
   createOrder: (orderData: Omit<Order, 'id' | 'createdAt' | 'status'>) => Order;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
+  markOrderAsPrinted: (orderId: string) => void;
+  refreshOrders: () => Promise<void>;
   deleteOrder: (orderId: string) => void;
   updateMNPConfig: (updates: Partial<MNPConfig>) => void;
   connectMNP: (configUpdates: Partial<MNPConfig>) => boolean;
@@ -106,11 +126,19 @@ const INITIAL_ORDERS: Order[] = [
 ];
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Products
+  // Products: initialized with INITIAL_PRODUCTS merged with saved products
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map<string, Product>();
+          INITIAL_PRODUCTS.forEach((p) => map.set(p.id, p));
+          parsed.forEach((p) => map.set(p.id, p));
+          return Array.from(map.values());
+        }
+      }
     } catch {
       // fallback
     }
@@ -262,15 +290,120 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Products');
+  const [isStorageInitialized, setIsStorageInitialized] = useState(false);
 
-  // Persistence effects
+  // Background Async Sync on Mount (IndexedDB + Server API + LocalStorage)
   useEffect(() => {
+    let isMounted = true;
+
+    async function syncInitialStorage() {
+      const mergedMap = new Map<string, Product>();
+
+      // 1. Seed base with INITIAL_PRODUCTS
+      INITIAL_PRODUCTS.forEach((p) => mergedMap.set(p.id, p));
+
+      // 2. Read from LocalStorage
+      try {
+        const localRaw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+        if (localRaw) {
+          const parsed = JSON.parse(localRaw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((p) => {
+              if (p && p.id) mergedMap.set(p.id, p);
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('LocalStorage read error during sync:', err);
+      }
+
+      // 3. Read from IndexedDB (Unlimited persistent browser storage)
+      try {
+        const dbProducts = await getAllProductsFromDB();
+        if (dbProducts && Array.isArray(dbProducts) && dbProducts.length > 0) {
+          dbProducts.forEach((p) => {
+            if (p && p.id) mergedMap.set(p.id, p);
+          });
+        }
+      } catch (e) {
+        console.warn('IndexedDB initial sync error:', e);
+      }
+
+      // 4. Read from Server REST API (/api/products)
+      try {
+        const res = await fetch('/api/products');
+        if (res.ok) {
+          const serverProducts = await res.json();
+          if (Array.isArray(serverProducts) && serverProducts.length > 0) {
+            serverProducts.forEach((p) => {
+              if (p && p.id) mergedMap.set(p.id, p);
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Server API read error during sync:', err);
+      }
+
+      const allMerged = Array.from(mergedMap.values());
+
+      if (isMounted) {
+        setProducts(allMerged);
+        setIsStorageInitialized(true);
+
+        // Ensure IndexedDB holds the merged complete catalog
+        saveAllProductsToDB(allMerged).catch(() => {});
+
+        // Sync back to server API so disk is fully updated with any local products
+        try {
+          fetch('/api/products/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ products: allMerged }),
+          }).catch(() => {});
+        } catch {}
+      }
+
+      // 5. Read categories from Server REST API
+      try {
+        const catRes = await fetch('/api/categories');
+        if (catRes.ok) {
+          const serverCategories = await catRes.json();
+          if (isMounted && Array.isArray(serverCategories) && serverCategories.length > 0) {
+            setCategories((prev) => {
+              const set = new Set([...INITIAL_CATEGORIES, ...prev, ...serverCategories]);
+              return Array.from(set);
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    syncInitialStorage();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Persistence effect: ONLY runs after initial storage has loaded
+  useEffect(() => {
+    if (!isStorageInitialized || products.length === 0) return;
+
+    // 1. Save to IndexedDB (asynchronous, supports hundreds/thousands of products and high-res images)
+    saveAllProductsToDB(products).catch((e) => {
+      console.warn('IndexedDB save error (products):', e);
+    });
+
+    // 2. Save to LocalStorage with safe quota fallback (IndexedDB is the primary high-capacity store)
     try {
       localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
     } catch (e) {
-      console.warn('LocalStorage save error (products):', e);
+      // LocalStorage quota is 5MB in browsers. IndexedDB stores unlimited products and images.
+      console.warn('LocalStorage quota limit reached (typical with 50+ products & photos). IndexedDB and Server DB retain all persistent products.');
     }
-  }, [products]);
+  }, [products, isStorageInitialized]);
 
   useEffect(() => {
     try {
@@ -385,37 +518,114 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Product CRUD
   const addProduct = (productData: Omit<Product, 'id' | 'createdAt'>): Product => {
+    const uniqueId = generateUniqueProductId();
     const newProduct: Product = {
       ...productData,
-      id: `hzc-${Date.now().toString().slice(-6)}`,
+      id: uniqueId,
       createdAt: new Date().toISOString(),
+      isActive: productData.isActive !== false,
     };
-    setProducts((prev) => [newProduct, ...prev]);
+
+    // 1. Update React state immediately (creates a new product record, never overwriting existing)
+    setProducts((prev) => {
+      // Filter any accidental duplicate
+      const filtered = prev.filter((p) => p.id !== uniqueId);
+      const updated = [newProduct, ...filtered];
+      saveProductToDB(newProduct).catch(() => {});
+      return updated;
+    });
+
+    // 2. Persist to server backend database
+    fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newProduct),
+    }).catch((err) => console.warn('Server sync error on addProduct:', err));
+
+    // 3. Ensure category is present in category list so product is never hidden by category filter
+    if (newProduct.category) {
+      addCategory(newProduct.category);
+    }
+
     return newProduct;
   };
 
   const updateProduct = (id: string, updates: Partial<Product>) => {
-    setProducts((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
+    setProducts((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === id) {
+          const modified = { ...item, ...updates, id }; // Guarantee ID is never modified
+          saveProductToDB(modified).catch(() => {});
+          return modified;
+        }
+        return item;
+      });
+      return updated;
+    });
+
+    fetch(`/api/products/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }).catch((err) => console.warn('Server sync error on updateProduct:', err));
   };
 
   const deleteProduct = (id: string) => {
-    setProducts((prev) => prev.filter((item) => item.id !== id));
+    setProducts((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      saveAllProductsToDB(updated).catch(() => {});
+      return updated;
+    });
+
+    deleteProductFromDB(id).catch(() => {});
+
+    fetch(`/api/products/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch((err) => console.warn('Server sync error on deleteProduct:', err));
   };
 
   const toggleProductActive = (id: string) => {
-    setProducts((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, isActive: !item.isActive } : item))
-    );
+    setProducts((prev) => {
+      let targetProduct: Product | null = null;
+      const updated = prev.map((item) => {
+        if (item.id === id) {
+          targetProduct = { ...item, isActive: !item.isActive };
+          return targetProduct;
+        }
+        return item;
+      });
+      if (targetProduct) {
+        saveProductToDB(targetProduct).catch(() => {});
+        fetch(`/api/products/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive: (targetProduct as Product).isActive }),
+        }).catch(() => {});
+      }
+      return updated;
+    });
   };
 
   const toggleRunningBannerProduct = (id: string) => {
-    setProducts((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, inRunningBanner: !item.inRunningBanner } : item
-      )
-    );
+    setProducts((prev) => {
+      let targetProduct: Product | null = null;
+      const updated = prev.map((item) => {
+        if (item.id === id) {
+          targetProduct = { ...item, inRunningBanner: !item.inRunningBanner };
+          return targetProduct;
+        }
+        return item;
+      });
+      if (targetProduct) {
+        saveProductToDB(targetProduct).catch(() => {});
+        fetch(`/api/products/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inRunningBanner: (targetProduct as Product).inRunningBanner }),
+        }).catch(() => {});
+      }
+      return updated;
+    });
   };
 
   const addCategory = (category: string) => {

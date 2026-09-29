@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { STORE_WHATSAPP_NUMBER, getGeneralWhatsAppUrl } from '../utils/whatsapp';
+import { TikTokIcon } from './icons/TikTokIcon';
+import { TIKTOK_PROFILE_URL } from '../utils/socialLinks';
 
 interface HeaderProps {
   onOpenCart: () => void;
@@ -42,10 +44,27 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm transition-all duration-300">
       {/* Top Announcement Bar */}
-      <div className="bg-amber-500 text-white py-1.5 px-4 text-xs font-semibold text-center flex items-center justify-center gap-2 tracking-wide shadow-inner">
-        <Sparkles className="w-3.5 h-3.5 fill-white" />
-        <span>Get Extra <strong>5% OFF</strong> on Advance Payment (Easypaisa / UBL Bank) • Delivery Across Pakistan</span>
-        <span className="hidden md:inline">• WhatsApp Order: <strong>{STORE_WHATSAPP_NUMBER}</strong></span>
+      <div className="bg-amber-500 text-white py-1.5 px-4 text-xs font-semibold tracking-wide shadow-inner">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 mx-auto sm:mx-0">
+            <Sparkles className="w-3.5 h-3.5 fill-white shrink-0" />
+            <span>Get Extra <strong>5% OFF</strong> on Advance Payment (JazzCash / Easypaisa / UBL Bank) • Delivery Across Pakistan</span>
+            <span className="hidden md:inline">• WhatsApp Order: <strong>{STORE_WHATSAPP_NUMBER}</strong></span>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-4 text-[11px] shrink-0">
+            <a
+              href={TIKTOK_PROFILE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-white/95 hover:text-white hover:underline transition-colors font-bold"
+              title="Official TikTok Profile (@zarri.chappal.pk)"
+            >
+              <TikTokIcon className="w-3.5 h-3.5 fill-white" />
+              <span>Follow Us on TikTok</span>
+            </a>
+          </div>
+        </div>
       </div>
 
       {/* Main Navigation Bar */}
@@ -161,6 +180,18 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
+            {/* Official TikTok Profile Button (Desktop) */}
+            <a
+              href={TIKTOK_PROFILE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden lg:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-black hover:bg-neutral-800 text-white text-xs font-bold transition-all shadow-xs hover:scale-105 border border-black/20"
+              title="Follow Hasnain Zarri Chappal Store on TikTok (@zarri.chappal.pk)"
+            >
+              <TikTokIcon className="w-3.5 h-3.5 fill-white" />
+              <span>Follow Us on TikTok</span>
+            </a>
+
             {/* Direct WhatsApp Order CTA Button */}
             <a
               href={getGeneralWhatsAppUrl()}
@@ -241,15 +272,27 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          <div className="pt-4 border-t border-gray-200 space-y-3">
+          <div className="pt-4 border-t border-gray-200 space-y-2.5">
+            {/* Direct WhatsApp Order CTA Button */}
             <a
               href={getGeneralWhatsAppUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold py-2.5 rounded-lg shadow-sm"
+              className="w-full flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold py-2.5 rounded-xl shadow-sm text-sm"
             >
               <MessageCircle className="w-5 h-5 fill-white" />
               <span>Direct WhatsApp Order (03432782295)</span>
+            </a>
+
+            {/* Official TikTok Profile Button (Mobile) */}
+            <a
+              href={TIKTOK_PROFILE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 bg-black hover:bg-neutral-900 text-white font-bold py-2.5 rounded-xl shadow-sm text-sm transition-all"
+            >
+              <TikTokIcon className="w-4 h-4 fill-white" />
+              <span>Follow Us on TikTok</span>
             </a>
 
             <div className="flex items-center justify-between text-xs text-gray-500 px-1 pt-1">

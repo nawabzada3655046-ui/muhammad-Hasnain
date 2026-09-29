@@ -6,12 +6,16 @@ interface AdvancePaymentBannerProps {
 }
 
 export const AdvancePaymentBanner: React.FC<AdvancePaymentBannerProps> = ({ onShopNow }) => {
+  const [copiedJazzcash, setCopiedJazzcash] = useState(false);
   const [copiedEasypaisa, setCopiedEasypaisa] = useState(false);
   const [copiedUBL, setCopiedUBL] = useState(false);
 
-  const copyNumber = (text: string, type: 'ep' | 'ubl') => {
+  const copyNumber = (text: string, type: 'jazzcash' | 'ep' | 'ubl') => {
     navigator.clipboard.writeText(text);
-    if (type === 'ep') {
+    if (type === 'jazzcash') {
+      setCopiedJazzcash(true);
+      setTimeout(() => setCopiedJazzcash(false), 2000);
+    } else if (type === 'ep') {
       setCopiedEasypaisa(true);
       setTimeout(() => setCopiedEasypaisa(false), 2000);
     } else {
@@ -39,7 +43,7 @@ export const AdvancePaymentBanner: React.FC<AdvancePaymentBannerProps> = ({ onSh
               </h2>
 
               <p className="text-sm sm:text-base text-gray-600 leading-relaxed font-normal max-w-xl">
-                Skip the courier handling delays! Transfer via Easypaisa or UBL Bank at checkout to automatically enjoy 5% savings on your entire order amount.
+                Skip courier handling delays! Transfer via JazzCash, Easypaisa, or UBL Bank at checkout to automatically enjoy 5% savings on your entire order amount.
               </p>
 
               {/* Example calculation card */}
@@ -71,14 +75,36 @@ export const AdvancePaymentBanner: React.FC<AdvancePaymentBannerProps> = ({ onSh
 
             {/* Right Column: Account Details Box */}
             <div className="lg:col-span-5 space-y-3.5">
-              <div className="p-5 rounded-2xl bg-white border border-gray-200 space-y-3.5 shadow-md">
+              <div className="p-5 rounded-2xl bg-white border border-gray-200 space-y-3 shadow-md">
                 <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-amber-600" />
-                  Verified Store Accounts
+                  Verified Store Accounts (Title: Muhammad Hasnain)
                 </h4>
 
+                {/* JazzCash */}
+                <div className="p-3 rounded-xl bg-red-50/60 border border-red-300 flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-red-800 text-xs font-bold uppercase">
+                      <Smartphone className="w-4 h-4 text-red-600" />
+                      <span>JazzCash Account</span>
+                    </div>
+                    <div className="text-base font-mono font-extrabold text-gray-900 mt-0.5">
+                      03048539583
+                    </div>
+                    <span className="text-[11px] text-gray-600 font-medium">Title: Muhammad Hasnain</span>
+                  </div>
+
+                  <button
+                    onClick={() => copyNumber('03048539583', 'jazzcash')}
+                    className="py-1.5 px-3 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    {copiedJazzcash ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedJazzcash ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+
                 {/* Easypaisa */}
-                <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-300 flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-300 flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-1.5 text-emerald-800 text-xs font-bold uppercase">
                       <Smartphone className="w-4 h-4 text-emerald-600" />
@@ -87,12 +113,12 @@ export const AdvancePaymentBanner: React.FC<AdvancePaymentBannerProps> = ({ onSh
                     <div className="text-base font-mono font-extrabold text-gray-900 mt-0.5">
                       03432782295
                     </div>
-                    <span className="text-[11px] text-gray-500">Title: Hasnain Zarri</span>
+                    <span className="text-[11px] text-gray-600 font-medium">Title: Muhammad Hasnain</span>
                   </div>
 
                   <button
                     onClick={() => copyNumber('03432782295', 'ep')}
-                    className="py-1.5 px-3 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                    className="py-1.5 px-3 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     {copiedEasypaisa ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedEasypaisa ? 'Copied' : 'Copy'}</span>
@@ -100,7 +126,7 @@ export const AdvancePaymentBanner: React.FC<AdvancePaymentBannerProps> = ({ onSh
                 </div>
 
                 {/* UBL Bank */}
-                <div className="p-3.5 rounded-xl bg-blue-50/50 border border-blue-300 flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-300 flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-1.5 text-blue-800 text-xs font-bold uppercase">
                       <Building2 className="w-4 h-4 text-blue-600" />
@@ -109,12 +135,12 @@ export const AdvancePaymentBanner: React.FC<AdvancePaymentBannerProps> = ({ onSh
                     <div className="text-base font-mono font-extrabold text-gray-900 mt-0.5">
                       0564327905374
                     </div>
-                    <span className="text-[11px] text-gray-500">Title: Hasnain Zarri Store</span>
+                    <span className="text-[11px] text-gray-600 font-medium">Title: Muhammad Hasnain</span>
                   </div>
 
                   <button
                     onClick={() => copyNumber('0564327905374', 'ubl')}
-                    className="py-1.5 px-3 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                    className="py-1.5 px-3 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     {copiedUBL ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedUBL ? 'Copied' : 'Copy'}</span>

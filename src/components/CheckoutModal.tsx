@@ -18,6 +18,7 @@ import { useStore } from '../context/StoreContext';
 import { Order } from '../types';
 import { STORE_ADDRESS } from '../utils/whatsapp';
 import { CustomerProtectionBadges } from './CustomerProtectionBadges';
+import { CheckoutCountdownTimer } from './CheckoutCountdownTimer';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'advance'>('advance');
   const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
 
+  const [copiedJazzcash, setCopiedJazzcash] = useState(false);
   const [copiedEasypaisa, setCopiedEasypaisa] = useState(false);
   const [copiedUBL, setCopiedUBL] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -102,11 +104,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const shippingFee = 0; // Free delivery across Pakistan
   const finalAmount = Math.max(0, subtotal - discount + shippingFee);
 
-  const handleCopy = (text: string, type: 'easypaisa' | 'ubl') => {
+  const handleCopy = (text: string, type: 'easypaisa' | 'jazzcash' | 'ubl') => {
     navigator.clipboard.writeText(text);
     if (type === 'easypaisa') {
       setCopiedEasypaisa(true);
       setTimeout(() => setCopiedEasypaisa(false), 2000);
+    } else if (type === 'jazzcash') {
+      setCopiedJazzcash(true);
+      setTimeout(() => setCopiedJazzcash(false), 2000);
     } else {
       setCopiedUBL(true);
       setTimeout(() => setCopiedUBL(false), 2000);
@@ -220,6 +225,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* 24-Hour Special Offer Countdown Timer */}
+        <CheckoutCountdownTimer />
 
         {/* Form Body */}
         <form onSubmit={handleSubmitOrder} className="p-5 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto">
@@ -464,7 +472,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-gray-600 mt-2.5">
-                  Easypaisa or UBL Bank transfer. Instant verification via screenshot.
+                  JazzCash, Easypaisa or UBL Bank transfer. Instant verification via screenshot.
                 </p>
               </div>
 
@@ -498,7 +506,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             </div>
 
-            {/* Advance Payment Details Section (Easypaisa & UBL Bank) */}
+            {/* Advance Payment Details Section (JazzCash, Easypaisa & UBL Bank) */}
             {isAdvance && (
               <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-4 animate-in fade-in duration-300">
                 <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
@@ -513,23 +521,47 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {/* Account Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   
+                  {/* JazzCash */}
+                  <div className="p-3.5 rounded-xl bg-white border border-red-300 flex items-center justify-between shadow-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-red-700 font-bold text-xs uppercase">
+                        <Smartphone className="w-4 h-4 text-red-600" />
+                        <span>JazzCash</span>
+                      </div>
+                      <div className="text-sm font-mono font-extrabold text-gray-900">
+                        03048539583
+                      </div>
+                      <span className="text-[10px] text-gray-600 font-medium block">Title: Muhammad Hasnain</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCopy('03048539583', 'jazzcash')}
+                      className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-800 text-xs font-semibold flex items-center gap-1 transition-colors border border-red-200 cursor-pointer"
+                      title="Copy Number"
+                    >
+                      {copiedJazzcash ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedJazzcash ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+
                   {/* Easypaisa */}
                   <div className="p-3.5 rounded-xl bg-white border border-emerald-300 flex items-center justify-between shadow-xs">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-xs uppercase">
-                        <Smartphone className="w-4 h-4" />
+                        <Smartphone className="w-4 h-4 text-emerald-600" />
                         <span>Easypaisa</span>
                       </div>
                       <div className="text-sm font-mono font-extrabold text-gray-900">
                         03432782295
                       </div>
-                      <span className="text-[10px] text-gray-500 block">Title: Hasnain Zarri</span>
+                      <span className="text-[10px] text-gray-600 font-medium block">Title: Muhammad Hasnain</span>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => handleCopy('03432782295', 'easypaisa')}
-                      className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1 transition-colors border border-emerald-200"
+                      className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1 transition-colors border border-emerald-200 cursor-pointer"
                       title="Copy Number"
                     >
                       {copiedEasypaisa ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -538,22 +570,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </div>
 
                   {/* UBL Bank */}
-                  <div className="p-3.5 rounded-xl bg-white border border-blue-300 flex items-center justify-between shadow-xs">
+                  <div className="p-3.5 rounded-xl bg-white border border-blue-300 flex items-center justify-between shadow-xs sm:col-span-2">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-1.5 text-blue-700 font-bold text-xs uppercase">
-                        <Building2 className="w-4 h-4" />
-                        <span>UBL Bank</span>
+                        <Building2 className="w-4 h-4 text-blue-600" />
+                        <span>UBL Bank Account</span>
                       </div>
                       <div className="text-sm font-mono font-extrabold text-gray-900">
                         0564327905374
                       </div>
-                      <span className="text-[10px] text-gray-500 block">Title: Hasnain Zarri Store</span>
+                      <span className="text-[10px] text-gray-600 font-medium block">Title: Muhammad Hasnain</span>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => handleCopy('0564327905374', 'ubl')}
-                      className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-semibold flex items-center gap-1 transition-colors border border-blue-200"
+                      className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-semibold flex items-center gap-1 transition-colors border border-blue-200 cursor-pointer"
                       title="Copy Account Number"
                     >
                       {copiedUBL ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}

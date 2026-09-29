@@ -164,7 +164,7 @@ export const MNPShipmentModal: React.FC<MNPShipmentModalProps> = ({
                 className="w-full sm:w-auto py-3 px-5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-xs flex items-center justify-center gap-2 border border-gray-300 transition-all"
               >
                 <ExternalLink className="w-4 h-4" />
-                <span>Open MNP Courier Portal</span>
+                <span>Track Consignment Online</span>
               </a>
             </div>
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, ArrowUpRight } from 'lucide-react';
+import { Sparkles, ArrowUpRight, PackageCheck } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../types';
 
@@ -87,6 +87,13 @@ export const RunningBanner: React.FC<RunningBannerProps> = ({ onSelectProduct })
                       {discountPercent}% OFF
                     </span>
                   )}
+                </div>
+
+                <div className="mt-1">
+                  <span className="inline-flex items-center gap-1 text-[8px] font-black bg-black text-yellow-400 border border-yellow-400/80 px-1.5 py-0.2 rounded uppercase tracking-wider">
+                    <PackageCheck className="w-2.5 h-2.5 text-yellow-400 stroke-[2.5]" />
+                    <span>ALLOWED TO OPEN PARCEL</span>
+                  </span>
                 </div>
               </div>
             </div>

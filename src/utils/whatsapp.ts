@@ -15,17 +15,20 @@ export function getProductWhatsAppUrl(
   quantity: number = 1,
   customerName?: string
 ): string {
+  const currentOrigin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
+  const productLink = currentOrigin ? `${currentOrigin}/#product-${product.id}` : '';
   const sizeText = selectedSize ? `\n👟 *Selected Size:* ${selectedSize}` : '';
   const nameText = customerName ? `\n👤 *Customer Name:* ${customerName}` : '';
+  const linkText = productLink ? `\n🔗 *Product Link:* ${productLink}` : '';
   
   const text = `Assalam-o-Alaikum Hasnain Zarri Chappal Store! 🌟
 I want to order this product:
 
-👞 *Product:* ${product.title}
+👞 *Product Name:* ${product.title}
 💰 *Price:* Rs. ${product.price.toLocaleString()}${sizeText}
-🔢 *Quantity:* ${quantity}${nameText}
+🔢 *Quantity:* ${quantity}${nameText}${linkText}
 
-Please confirm availability and order booking. Delivery across Pakistan.`;
+Please confirm my order booking and delivery details. Delivery Across Pakistan.`;
 
   return `https://wa.me/${STORE_WHATSAPP_INT}?text=${encodeURIComponent(text)}`;
 }
@@ -55,7 +58,7 @@ ${itemsText}
 💵 *Subtotal:* Rs. ${order.subtotal.toLocaleString()}${discountText}
 🚚 *Delivery:* FREE Across Pakistan
 ⭐ *Final Total:* Rs. ${order.finalAmount.toLocaleString()}
-💳 *Payment Method:* ${order.paymentMethod === 'advance' ? 'Advance Payment (Easypaisa/UBL - Screenshot Uploaded)' : 'Cash on Delivery (COD)'}
+💳 *Payment Method:* ${order.paymentMethod === 'advance' ? 'Advance Payment (JazzCash/Easypaisa/UBL - Screenshot Uploaded)' : 'Cash on Delivery (COD)'}
 ${order.specialInstructions ? `\n📝 *Notes:* ${order.specialInstructions}` : ''}
 
 Please confirm my order and share tracking details. Thank you!`;

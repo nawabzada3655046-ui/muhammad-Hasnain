@@ -1,14 +1,25 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig, Plugin } from 'vite';
+import { createApiMiddleware } from './src/server/apiMiddleware.ts';
+
+function apiBackendPlugin(): Plugin {
+  const middleware = createApiMiddleware();
+  return {
+    name: 'api-backend-plugin',
+    configureServer(server) {
+      server.middlewares.use(middleware);
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), apiBackendPlugin()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {

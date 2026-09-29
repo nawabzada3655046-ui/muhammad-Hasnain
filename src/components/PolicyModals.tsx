@@ -45,7 +45,7 @@ export const PolicyModals: React.FC<PolicyModalProps> = ({ type, onClose }) => {
               </p>
               <h4 className="font-bold text-amber-800 text-sm">2. Advance Payment Proof</h4>
               <p>
-                If you select Advance Payment (Easypaisa / UBL Bank), the payment screenshot uploaded by you is exclusively used to verify your transaction and apply the 5% discount before dispatch.
+                If you select Advance Payment (JazzCash / Easypaisa / UBL Bank), the payment screenshot uploaded by you is exclusively used to verify your transaction and apply the 5% discount before dispatch.
               </p>
               <h4 className="font-bold text-amber-800 text-sm">3. Order Updates via WhatsApp</h4>
               <p>
@@ -67,7 +67,7 @@ export const PolicyModals: React.FC<PolicyModalProps> = ({ type, onClose }) => {
               </p>
               <h4 className="font-bold text-amber-800 text-sm">2. Pricing & 5% Advance Payment Discount</h4>
               <p>
-                All prices are listed in Pakistani Rupees (PKR). Customers choosing Advance Payment via Easypaisa or UBL Bank receive an immediate 5% discount calculated automatically upon checkout.
+                All prices are listed in Pakistani Rupees (PKR). Customers choosing Advance Payment via JazzCash, Easypaisa, or UBL Bank receive an immediate 5% discount calculated automatically upon checkout.
               </p>
               <h4 className="font-bold text-amber-800 text-sm">3. Delivery Across Pakistan</h4>
               <p>

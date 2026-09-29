@@ -10,7 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Minus
+  Minus,
+  PackageCheck
 } from 'lucide-react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
@@ -150,6 +151,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </span>
                 )}
               </div>
+
+              {/* Clearly Visible "ALLOWED TO OPEN PARCEL" Badge on Modal Image */}
+              <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none">
+                <div className="bg-black/95 backdrop-blur-xs text-yellow-400 border-2 border-yellow-400 py-2 px-3 rounded-2xl shadow-xl flex items-center justify-center gap-2 text-center">
+                  <PackageCheck className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 shrink-0 stroke-[2.5]" />
+                  <span className="font-black text-xs sm:text-sm tracking-wider text-yellow-400 uppercase drop-shadow-xs">
+                    ALLOWED TO OPEN PARCEL
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Thumbnail Gallery */}
@@ -227,10 +238,36 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
               {/* Advance Payment Banner Highlight */}
               <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
-                <span className="font-medium">⚡ Pay via Easypaisa / UBL Bank:</span>
+                <span className="font-medium">⚡ Pay via JazzCash / Easypaisa / UBL:</span>
                 <span className="font-extrabold text-amber-700 font-mono">
                   Rs. {Math.round(product.price * 0.95).toLocaleString()} (5% OFF)
                 </span>
+              </div>
+
+              {/* Clearly Visible "ALLOWED TO OPEN PARCEL" Official Guarantee Box */}
+              <div className="mt-3 p-3.5 sm:p-4 rounded-2xl bg-black border-2 border-yellow-400 text-yellow-400 shadow-md">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-yellow-400/20 border border-yellow-400/50 flex items-center justify-center text-yellow-400 shrink-0">
+                      <PackageCheck className="w-5 h-5 text-yellow-400 stroke-[2.5]" />
+                    </div>
+                    <div>
+                      <div className="font-black text-xs sm:text-sm tracking-wide text-yellow-400 uppercase flex items-center gap-2">
+                        <span>ALLOWED TO OPEN PARCEL</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-400 text-[10px] font-extrabold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Official Policy
+                        </span>
+                      </div>
+                      <p className="text-[11px] sm:text-xs text-yellow-100/90 mt-0.5 leading-snug">
+                        Open and inspect your chappal parcel at your doorstep before handing payment to the rider.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="hidden sm:inline-block px-3 py-1.5 rounded-xl bg-yellow-400 text-black text-[10px] font-black uppercase tracking-wider whitespace-nowrap shadow-xs">
+                    Open & Verify
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -351,12 +388,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
 
             {/* Shipping & Delivery Guarantee */}
-            <div className="pt-2 border-t border-gray-200 grid grid-cols-2 gap-3 text-[11px] text-gray-600">
-              <div className="flex items-center gap-2">
+            <div className="pt-3 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px]">
+              <div className="flex items-center gap-2 text-black font-extrabold bg-yellow-400/15 border border-yellow-400/80 rounded-xl p-2.5">
+                <PackageCheck className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
+                <span className="text-gray-900 font-black uppercase text-[10px] tracking-wide">
+                  ALLOWED TO OPEN PARCEL
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-2.5">
                 <Truck className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>Free & Fast Delivery in Pakistan</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-2.5">
                 <RotateCcw className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>Size Exchange Available</span>
               </div>

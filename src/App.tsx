@@ -7,6 +7,7 @@ import { ProductCard } from './components/ProductCard';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
+import { ProductCheckoutModal } from './components/ProductCheckoutModal';
 import { OrderConfirmationModal } from './components/OrderConfirmationModal';
 import { WhyChooseUs } from './components/WhyChooseUs';
 import { AdvancePaymentBanner } from './components/AdvancePaymentBanner';
@@ -30,11 +31,20 @@ function StoreMain() {
 
   // Modals & Navigation state
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [buyNowProduct, setBuyNowProduct] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [policyType, setPolicyType] = useState<'privacy' | 'terms' | null>(null);
+
+  // Pagination for unlimited products
+  const [catalogVisibleCount, setCatalogVisibleCount] = useState<number>(24);
+
+  // Reset pagination when category or search changes
+  React.useEffect(() => {
+    setCatalogVisibleCount(24);
+  }, [selectedCategory, searchQuery]);
 
   // Filtered active products
   const activeProducts = useMemo(() => {
@@ -60,7 +70,10 @@ function StoreMain() {
       if (selectedCategory === "Women's Chappal") return product.category.includes("Women's Chappal");
       if (selectedCategory === "Women's Khussa") return product.category.includes("Women's Khussa");
 
-      return product.category === selectedCategory;
+      return (
+        product.category.trim().toLowerCase() === selectedCategory.trim().toLowerCase() ||
+        product.category.toLowerCase().includes(selectedCategory.toLowerCase())
+      );
     });
   }, [activeProducts, selectedCategory, searchQuery]);
 
@@ -98,8 +111,13 @@ function StoreMain() {
     addToCart(product, size, 1);
   };
 
+  const handleBuyNow = (product: Product) => {
+    setBuyNowProduct(product);
+  };
+
   const handleOrderSuccess = (order: Order) => {
     setCheckoutOpen(false);
+    setBuyNowProduct(null);
     setConfirmedOrder(order);
   };
 
@@ -120,7 +138,7 @@ function StoreMain() {
         <HeroBanner onShopNow={() => handleScrollToSection('catalog-section')} />
 
         {/* 3. Running Product Banner (Continuous marquee) */}
-        <RunningBanner onSelectProduct={(p) => setSelectedProduct(p)} />
+        <RunningBanner onSelectProduct={(p) => setBuyNowProduct(p)} />
 
         {/* Active Search Notification Banner if searching */}
         {searchQuery && (
@@ -168,7 +186,7 @@ function StoreMain() {
                 <ProductCard
                   key={product.id}
                   product={product}
-                  onViewProduct={(p) => setSelectedProduct(p)}
+                  onBuyNow={handleBuyNow}
                   onQuickAddToCart={handleQuickAddToCart}
                 />
               ))}
@@ -192,7 +210,16 @@ function StoreMain() {
               </div>
 
               <div className="text-xs text-gray-500">
-                Showing <strong className="text-gray-900 font-mono">{catalogProducts.length}</strong> handcrafted pairs
+                {catalogProducts.length > catalogVisibleCount ? (
+                  <span>
+                    Showing <strong className="text-gray-900 font-mono">{catalogVisibleCount}</strong> of{' '}
+                    <strong className="text-gray-900 font-mono">{catalogProducts.length}</strong> handcrafted pairs
+                  </span>
+                ) : (
+                  <span>
+                    Showing all <strong className="text-gray-900 font-mono">{catalogProducts.length}</strong> handcrafted pairs
+                  </span>
+                )}
               </div>
             </div>
 
@@ -222,22 +249,46 @@ function StoreMain() {
               </p>
               <button
                 onClick={() => { setSelectedCategory('All Products'); setSearchQuery(''); }}
-                className="px-5 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold uppercase shadow-sm"
+                className="px-5 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold uppercase shadow-sm cursor-pointer"
               >
                 Reset Filters
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {catalogProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onViewProduct={(p) => setSelectedProduct(p)}
-                  onQuickAddToCart={handleQuickAddToCart}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {catalogProducts.slice(0, catalogVisibleCount).map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onBuyNow={handleBuyNow}
+                    onQuickAddToCart={handleQuickAddToCart}
+                  />
+                ))}
+              </div>
+
+              {/* Load More & Show All for unlimited product scalability */}
+              {catalogProducts.length > catalogVisibleCount && (
+                <div className="pt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCatalogVisibleCount((prev) => prev + 24)}
+                    className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-extrabold text-xs sm:text-sm uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>Load More Products ({catalogProducts.length - catalogVisibleCount} more)</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCatalogVisibleCount(catalogProducts.length)}
+                    className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                  >
+                    Show All ({catalogProducts.length})
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
         </section>
@@ -269,7 +320,7 @@ function StoreMain() {
                   <ProductCard
                     key={product.id}
                     product={product}
-                    onViewProduct={(p) => setSelectedProduct(p)}
+                    onBuyNow={handleBuyNow}
                     onQuickAddToCart={handleQuickAddToCart}
                   />
                 ))}
@@ -304,7 +355,7 @@ function StoreMain() {
                 <ProductCard
                   key={product.id}
                   product={product}
-                  onViewProduct={(p) => setSelectedProduct(p)}
+                  onBuyNow={handleBuyNow}
                   onQuickAddToCart={handleQuickAddToCart}
                 />
               ))}
@@ -351,7 +402,15 @@ function StoreMain() {
         }}
       />
 
-      {/* CHECKOUT MODAL */}
+      {/* DEDICATED DIRECT PRODUCT CHECKOUT MODAL (BUY NOW) */}
+      <ProductCheckoutModal
+        product={buyNowProduct}
+        isOpen={!!buyNowProduct}
+        onClose={() => setBuyNowProduct(null)}
+        onOrderSuccess={handleOrderSuccess}
+      />
+
+      {/* CHECKOUT MODAL (CART) */}
       <CheckoutModal
         isOpen={checkoutOpen}
         onClose={() => setCheckoutOpen(false)}

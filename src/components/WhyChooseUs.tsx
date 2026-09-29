@@ -23,14 +23,14 @@ export const WhyChooseUs: React.FC = () => {
       description: `One-click booking directly with our store at ${STORE_WHATSAPP_NUMBER}. Instant sizing consultation & fast confirmations.`,
     },
     {
-      icon: Truck,
-      title: 'Cash on Delivery',
-      description: 'Order with zero worries and inspect your parcel. Pay cash conveniently at your doorstep across Pakistan.',
+      icon: PackageCheck,
+      title: 'ALLOWED TO OPEN PARCEL',
+      description: 'Order with zero worries—you are completely allowed to open and inspect your parcel before paying the courier rider across Pakistan.',
     },
     {
       icon: Percent,
       title: 'Advance Payment Discount',
-      description: 'Get an instant 5% OFF on your entire order when paying via Easypaisa or UBL Bank transfer.',
+      description: 'Get an instant 5% OFF on your entire order when paying via JazzCash, Easypaisa, or UBL Bank transfer.',
     },
     {
       icon: MapPin,

@@ -83,7 +83,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <div>
                     <span className="font-bold text-amber-800">Get 5% OFF with Advance Payment!</span>
                     <p className="text-amber-700 text-[11px] mt-0.5">
-                      Pay via Easypaisa or UBL Bank at checkout to save extra Rs. {potentialAdvanceDiscount.toLocaleString()}.
+                      Pay via JazzCash, Easypaisa or UBL Bank at checkout to save extra Rs. {potentialAdvanceDiscount.toLocaleString()}.
                     </p>
                   </div>
                 </div>

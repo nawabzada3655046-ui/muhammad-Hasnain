@@ -1,21 +1,14 @@
-import heroBannerImg from '../assets/images/hero_zarri_banner_1790507325438.jpg';
-import mensRoyalKhussaImg from '../assets/images/mens_royal_khussa_1790507401990.jpg';
-import mensZarriChappalImg from '../assets/images/mens_zarri_chappal_1790507337934.jpg';
-import noroziChappalImg from '../assets/images/norozi_chappal_1790507420836.jpg';
-import peshawariChappalImg from '../assets/images/peshawari_chappal_1790507350838.jpg';
-import womensGoldChappalImg from '../assets/images/womens_gold_chappal_1790507384558.jpg';
-import womensZarriKhussaImg from '../assets/images/womens_zarri_khussa_1790507365559.jpg';
-import { BannerConfig, Product } from '../types';
+export const DEFAULT_INITIAL_CATEGORIES = [
+  "All Products",
+  "Men's Chappal",
+  "Men's Khussa",
+  "Women's Chappal",
+  "Women's Khussa",
+  "New Arrivals",
+  "Featured Products"
+];
 
-export const INITIAL_BANNER_CONFIG: BannerConfig = {
-  heroTitle: 'Premium Zarri Chappal & Khussa',
-  heroSubtitle: 'Premium Quality • Stylish Designs • Delivery Across Pakistan',
-  heroImage: heroBannerImg,
-  enableRunningBanner: true,
-  announcementText: '✨ Special Offer: Get Extra 5% OFF on all Advance Payments via JazzCash, Easypaisa or UBL Bank! Delivery Across Pakistan.',
-};
-
-export const INITIAL_PRODUCTS: Product[] = [
+export const DEFAULT_INITIAL_PRODUCTS = [
   {
     id: 'hzc-001',
     title: 'Royal Golden Zarri Peshawari Chappal',
@@ -25,7 +18,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     sizes: [7, 8, 9, 10, 11, 12],
     stockStatus: 'in_stock',
     stockQuantity: 24,
-    images: [mensZarriChappalImg, peshawariChappalImg],
+    images: ['/src/assets/images/mens_zarri_chappal_1790507337934.jpg', '/src/assets/images/peshawari_chappal_1790507350838.jpg'],
     description: 'Masterfully hand-embroidered with pure golden zarri tilla thread on genuine full-grain black cowhide leather. Features a durable double tyre sole with comfort cushioned footbed. Perfect for weddings, Eid, and grand cultural gatherings.',
     isFeatured: true,
     isNewArrival: false,
@@ -42,7 +35,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     sizes: [6, 7, 8, 9, 10, 11],
     stockStatus: 'in_stock',
     stockQuantity: 30,
-    images: [peshawariChappalImg, noroziChappalImg],
+    images: ['/src/assets/images/peshawari_chappal_1790507350838.jpg', '/src/assets/images/norozi_chappal_1790507420836.jpg'],
     description: 'Handcrafted traditional Peshawari chappal in classic mustard tan calf leather. Crafted with hand-stitched welt, heavy tyre sole for extreme longevity, and reinforced buckle strap for custom fit.',
     isFeatured: true,
     isNewArrival: false,
@@ -59,7 +52,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     sizes: [7, 8, 9, 10, 11],
     stockStatus: 'in_stock',
     stockQuantity: 18,
-    images: [mensRoyalKhussaImg, mensZarriChappalImg],
+    images: ['/src/assets/images/mens_royal_khussa_1790507401990.jpg', '/src/assets/images/mens_zarri_chappal_1790507337934.jpg'],
     description: 'Regal groom khussa featuring intricate gold tilla and zari zardozi embroidery over deep royal velvet and genuine leather sole. Padded insole gives hours of effortless comfort during wedding celebrations.',
     isFeatured: true,
     isNewArrival: true,
@@ -76,7 +69,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     sizes: [36, 37, 38, 39, 40, 41],
     stockStatus: 'in_stock',
     stockQuantity: 28,
-    images: [womensZarriKhussaImg, womensGoldChappalImg],
+    images: ['/src/assets/images/womens_zarri_khussa_1790507365559.jpg', '/src/assets/images/womens_gold_chappal_1790507384558.jpg'],
     description: 'Authentic handcrafted Pakistani ladies khussa adorned with delicate golden zarri tilla, fine pearls, and cut-dana work. Super soft inner lining prevents shoe bites while offering royal elegance.',
     isFeatured: true,
     isNewArrival: true,
@@ -93,7 +86,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     sizes: [36, 37, 38, 39, 40, 41],
     stockStatus: 'in_stock',
     stockQuantity: 20,
-    images: [womensGoldChappalImg, womensZarriKhussaImg],
+    images: ['/src/assets/images/womens_gold_chappal_1790507384558.jpg', '/src/assets/images/womens_zarri_khussa_1790507365559.jpg'],
     description: 'Dainty and magnificent handcrafted women’s Zarri chappal flats with golden zari thread weave, bead embellishments, and anti-slip sole. Ideal pairing with Shalwar Kameez, Gharara, or formal wear.',
     isFeatured: false,
     isNewArrival: true,
@@ -110,7 +103,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     sizes: [7, 8, 9, 10, 11, 12],
     stockStatus: 'in_stock',
     stockQuantity: 15,
-    images: [noroziChappalImg, peshawariChappalImg],
+    images: ['/src/assets/images/norozi_chappal_1790507420836.jpg', '/src/assets/images/peshawari_chappal_1790507350838.jpg'],
     description: 'Original Balochi Norozi Chappal master-crafted in pure heavy bridle leather with distinct elevated heel curve, double thread hand-stitching, and antique gold finish buckle.',
     isFeatured: true,
     isNewArrival: true,
@@ -127,7 +120,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     sizes: [8, 9, 10, 11],
     stockStatus: 'limited',
     stockQuantity: 5,
-    images: [mensRoyalKhussaImg, mensZarriChappalImg],
+    images: ['/src/assets/images/mens_royal_khussa_1790507401990.jpg', '/src/assets/images/mens_zarri_chappal_1790507337934.jpg'],
     description: 'Handmade black velvet khussa with symmetrical imperial gold thread stitching. Features soft calfskin inner and genuine leather outer sole for lasting prestige.',
     isFeatured: false,
     isNewArrival: true,
@@ -144,7 +137,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     sizes: [36, 37, 38, 39, 40],
     stockStatus: 'in_stock',
     stockQuantity: 14,
-    images: [womensZarriKhussaImg, womensGoldChappalImg],
+    images: ['/src/assets/images/womens_zarri_khussa_1790507365559.jpg', '/src/assets/images/womens_gold_chappal_1790507384558.jpg'],
     description: 'Bridal special traditional footwear with dense golden tilla zari floral motifs and soft foam cushioning. Designed to match heavy bridal attire effortlessly.',
     isFeatured: true,
     isNewArrival: true,
@@ -152,14 +145,4 @@ export const INITIAL_PRODUCTS: Product[] = [
     isActive: true,
     createdAt: '2026-09-08T10:00:00.000Z',
   }
-];
-
-export const INITIAL_CATEGORIES = [
-  "All Products",
-  "Men's Chappal",
-  "Men's Khussa",
-  "Women's Chappal",
-  "Women's Khussa",
-  "New Arrivals",
-  "Featured Products"
 ];

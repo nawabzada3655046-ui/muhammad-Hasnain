@@ -23,7 +23,9 @@ import {
   RotateCcw,
   Truck,
   Copy,
-  ExternalLink
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { Product, Order } from '../../types';
@@ -31,6 +33,9 @@ import { STORE_WHATSAPP_NUMBER, getCustomerStatusWhatsAppUrl } from '../../utils
 import { MNPCourierIntegration } from './MNPCourierIntegration';
 import { MNPShipmentModal } from './MNPShipmentModal';
 import { AdminSecuritySettings } from './AdminSecuritySettings';
+import { optimizeImage } from '../../utils/imageOptimizer';
+import { TIKTOK_PROFILE_URL } from '../../utils/socialLinks';
+import { TikTokIcon } from '../icons/TikTokIcon';
 
 interface AdminDashboardProps {
   isOpen: boolean;
@@ -107,8 +112,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
 
-  // Product search in admin
+  // Product search & pagination in admin
   const [productAdminSearch, setProductAdminSearch] = useState('');
+  const [productAdminCategoryFilter, setProductAdminCategoryFilter] = useState('All');
+  const [adminProductPage, setAdminProductPage] = useState(1);
+  const [adminProductsPerPage, setAdminProductsPerPage] = useState<number>(50);
+  const [isOptimizingImage, setIsOptimizingImage] = useState(false);
+
+  // Close Product Modal & reset editing state safely
+  const handleCloseProductModal = () => {
+    setEditingProduct(null);
+    setProductModalOpen(false);
+    setFormError('');
+  };
 
   if (!isOpen) return null;
 
@@ -164,48 +180,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     setProductModalOpen(true);
   };
 
-  // Image Upload (JPG, JPEG, PNG, WEBP)
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Upload (JPG, JPEG, PNG, WEBP) with automatic canvas compression
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      // Validate allowed file types
+    setIsOptimizingImage(true);
+    setFormError('');
+
+    try {
+      const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+      for (const file of Array.from(files)) {
+        if (!validTypes.includes(file.type)) {
+          setFormError('Please select a valid image file (JPG, JPEG, PNG, WEBP).');
+          continue;
+        }
+        // Optimize to max 1200px and 0.85 quality (~80KB)
+        const optimized = await optimizeImage(file, 1200, 1200, 0.85);
+        if (optimized) {
+          setFormImages((prev) => [...prev, optimized]);
+        }
+      }
+    } catch {
+      setFormError('Failed to process image. Please try another file.');
+    } finally {
+      setIsOptimizingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  // Replace primary image when editing
+  const handleReplacePrimaryImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsOptimizingImage(true);
+    setFormError('');
+
+    try {
       const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
       if (!validTypes.includes(file.type)) {
         setFormError('Please select a valid image file (JPG, JPEG, PNG, WEBP).');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          setFormImages((prev) => [...prev, result]);
-          setFormError('');
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  // Replace primary image when editing
-  const handleReplacePrimaryImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    if (!validTypes.includes(file.type)) {
-      setFormError('Please select a valid image file (JPG, JPEG, PNG, WEBP).');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setFormImages((prev) => [result, ...prev.slice(1)]);
-        setFormError('');
+      const optimized = await optimizeImage(file, 1200, 1200, 0.85);
+      if (optimized) {
+        setFormImages((prev) => [optimized, ...prev.slice(1)]);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setFormError('Failed to process replacement image.');
+    } finally {
+      setIsOptimizingImage(false);
+      e.target.value = '';
+    }
   };
 
   const handleRemoveFormImage = (indexToRemove: number) => {
@@ -255,7 +282,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
         isFeatured: formIsFeatured,
         isNewArrival: formIsNewArrival,
         inRunningBanner: formInRunningBanner,
-        isActive: formIsActive,
+        isActive: formIsActive !== false,
       });
     } else {
       addProduct({
@@ -271,11 +298,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
         isFeatured: formIsFeatured,
         isNewArrival: formIsNewArrival,
         inRunningBanner: formInRunningBanner,
-        isActive: formIsActive,
+        isActive: formIsActive !== false,
       });
     }
 
+    // Always reset editing state so subsequent product additions create new records
+    setEditingProduct(null);
     setProductModalOpen(false);
+    setFormError('');
   };
 
   // Save Banner Config
@@ -338,11 +368,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   });
 
   // Filter Products for admin table
-  const filteredAdminProducts = products.filter(
-    (p) =>
+  const filteredAdminProducts = products.filter((p) => {
+    const matchesSearch =
+      productAdminSearch === '' ||
       p.title.toLowerCase().includes(productAdminSearch.toLowerCase()) ||
-      p.category.toLowerCase().includes(productAdminSearch.toLowerCase())
-  );
+      p.category.toLowerCase().includes(productAdminSearch.toLowerCase());
+
+    const matchesCat =
+      productAdminCategoryFilter === 'All' ||
+      p.category === productAdminCategoryFilter;
+
+    return matchesSearch && matchesCat;
+  });
+
+  const totalAdminProductPages = adminProductsPerPage === -1
+    ? 1
+    : Math.max(1, Math.ceil(filteredAdminProducts.length / adminProductsPerPage));
+
+  const safeAdminProductPage = Math.min(adminProductPage, totalAdminProductPages);
+
+  const paginatedAdminProducts = adminProductsPerPage === -1
+    ? filteredAdminProducts
+    : filteredAdminProducts.slice(
+        (safeAdminProductPage - 1) * adminProductsPerPage,
+        safeAdminProductPage * adminProductsPerPage
+      );
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/60 backdrop-blur-xs flex flex-col justify-start">
@@ -366,7 +416,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* TikTok Profile Quick Link */}
+          <a
+            href={TIKTOK_PROFILE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black hover:bg-neutral-800 text-white text-xs font-bold transition-all shadow-2xs hover:scale-105"
+            title="Open Official TikTok Profile (@zarri.chappal.pk) in new tab"
+          >
+            <TikTokIcon className="w-3.5 h-3.5 fill-white" />
+            <span>TikTok Profile</span>
+            <ExternalLink className="w-3 h-3 text-white/70" />
+          </a>
+
           {isAdmin && (
             <button
               onClick={logoutAdmin}
@@ -616,7 +679,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     <div className="text-2xl sm:text-3xl font-extrabold text-amber-800 font-mono">
                       {advancePaymentOrders}
                     </div>
-                    <span className="text-[11px] text-amber-700 block">Easypaisa & UBL Bank</span>
+                    <span className="text-[11px] text-amber-700 block">JazzCash, Easypaisa & UBL</span>
                   </div>
 
                   {/* COD Orders */}
@@ -728,22 +791,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
             {activeTab === 'products' && (
               <div className="space-y-4 animate-in fade-in duration-200">
                 
-                {/* Search & Add Product Actions */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="relative w-full sm:w-80">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Search products by title or category..."
-                      value={productAdminSearch}
-                      onChange={(e) => setProductAdminSearch(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-300 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-gray-900 focus:outline-none focus:border-amber-500"
-                    />
+                {/* Search, Filter & Add Product Actions */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2 flex-1">
+                    <div className="relative w-full sm:w-72">
+                      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Search products by title or category..."
+                        value={productAdminSearch}
+                        onChange={(e) => {
+                          setProductAdminSearch(e.target.value);
+                          setAdminProductPage(1);
+                        }}
+                        className="w-full bg-gray-50 border border-gray-300 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-gray-900 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <select
+                      value={productAdminCategoryFilter}
+                      onChange={(e) => {
+                        setProductAdminCategoryFilter(e.target.value);
+                        setAdminProductPage(1);
+                      }}
+                      className="bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-amber-500 cursor-pointer"
+                    >
+                      <option value="All">All Categories ({products.length})</option>
+                      {categories.filter(c => c !== 'All Products').map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat} ({products.filter(p => p.category === cat).length})
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={adminProductsPerPage}
+                      onChange={(e) => {
+                        setAdminProductsPerPage(Number(e.target.value));
+                        setAdminProductPage(1);
+                      }}
+                      className="bg-gray-50 border border-gray-300 rounded-xl px-2.5 py-2 text-xs text-gray-700 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+                      title="Products per page"
+                    >
+                      <option value={10}>10 / page</option>
+                      <option value={20}>20 / page</option>
+                      <option value={50}>50 / page</option>
+                      <option value={100}>100 / page</option>
+                      <option value={-1}>Show All</option>
+                    </select>
                   </div>
 
                   <button
                     onClick={handleOpenAddProduct}
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm cursor-pointer whitespace-nowrap"
                   >
                     <Plus className="w-4 h-4 stroke-[3]" />
                     <span>Add New Product</span>
@@ -768,7 +868,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {filteredAdminProducts.map((prod) => (
+                        {paginatedAdminProducts.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="py-8 text-center text-gray-500 text-xs">
+                              No products found matching your current search or category filter.
+                            </td>
+                          </tr>
+                        ) : (
+                          paginatedAdminProducts.map((prod) => (
                           <tr key={prod.id} className="hover:bg-gray-50">
                             
                             {/* Thumbnail */}
@@ -901,10 +1008,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                             </td>
 
                           </tr>
-                        ))}
+                        )))}
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Pagination Controls for unlimited products */}
+                  {filteredAdminProducts.length > 0 && adminProductsPerPage !== -1 && totalAdminProductPages > 1 && (
+                    <div className="p-3.5 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                      <span className="text-gray-500 font-medium">
+                        Showing{' '}
+                        <strong className="text-gray-800 font-mono">
+                          {(safeAdminProductPage - 1) * adminProductsPerPage + 1}
+                        </strong>{' '}
+                        to{' '}
+                        <strong className="text-gray-800 font-mono">
+                          {Math.min(safeAdminProductPage * adminProductsPerPage, filteredAdminProducts.length)}
+                        </strong>{' '}
+                        of{' '}
+                        <strong className="text-gray-900 font-mono">{filteredAdminProducts.length}</strong> products
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAdminProductPage((prev) => Math.max(1, prev - 1))}
+                          disabled={safeAdminProductPage <= 1}
+                          className="p-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors cursor-pointer"
+                          title="Previous Page"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+
+                        <span className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800">
+                          Page {safeAdminProductPage} of {totalAdminProductPages}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => setAdminProductPage((prev) => Math.min(totalAdminProductPages, prev + 1))}
+                          disabled={safeAdminProductPage >= totalAdminProductPages}
+                          className="p-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors cursor-pointer"
+                          title="Next Page"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -1363,8 +1514,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
               </div>
 
               <button
-                onClick={() => setProductModalOpen(false)}
-                className="p-2 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                onClick={handleCloseProductModal}
+                className="p-2 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1633,13 +1784,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                 </label>
               </div>
 
-              {/* Submit Product */}
-              <div className="pt-3">
+              {/* Submit Product & Cancel */}
+              <div className="pt-3 flex items-center gap-3">
                 <button
                   type="submit"
-                  className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-white font-extrabold text-sm shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
+                  disabled={isOptimizingImage}
+                  className="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-white font-extrabold text-sm shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer disabled:opacity-60"
                 >
-                  {editingProduct ? 'Save & Update Product' : 'Add Product to Store'}
+                  {isOptimizingImage
+                    ? 'Processing Picture...'
+                    : editingProduct
+                    ? 'Save & Update Product'
+                    : 'Add Product to Store'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseProductModal}
+                  className="py-3.5 px-5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
                 </button>
               </div>
 

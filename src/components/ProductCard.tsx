@@ -1,24 +1,25 @@
 import React from 'react';
-import { MessageCircle, Eye, Check, AlertCircle } from 'lucide-react';
+import { MessageCircle, Check, AlertCircle, PackageCheck, Zap } from 'lucide-react';
 import { Product } from '../types';
 import { getProductWhatsAppUrl } from '../utils/whatsapp';
 
 interface ProductCardProps {
   product: Product;
-  onViewProduct: (product: Product) => void;
+  onBuyNow: (product: Product) => void;
+  onViewProduct?: (product: Product) => void;
   onQuickAddToCart?: (product: Product) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
-  onViewProduct,
+  onBuyNow,
 }) => {
   const discountPercent =
     product.oldPrice && product.oldPrice > product.price
       ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
       : null;
 
-  const defaultSize = product.sizes[0] || 'Standard';
+  const defaultSize = product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'Standard';
 
   const isOutOfStock = product.stockStatus === 'out_of_stock' || product.stockQuantity <= 0;
   const isLimited = product.stockStatus === 'limited';
@@ -28,10 +29,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     window.open(getProductWhatsAppUrl(product, defaultSize, 1), '_blank');
   };
 
+  const handleBuyNowClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onBuyNow(product);
+  };
+
   return (
     <div 
-      onClick={() => onViewProduct(product)}
-      className="group relative bg-white rounded-2xl overflow-hidden border border-gray-200 hover:border-amber-400 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer"
+      id={`product-${product.id}`}
+      onClick={() => onBuyNow(product)}
+      className="group relative bg-white rounded-2xl overflow-hidden border border-gray-200 hover:border-yellow-400 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer"
     >
       {/* Top Image Container with Golden Glow Light Halo */}
       <div className="relative aspect-square w-full overflow-hidden bg-amber-50/20 border-b border-amber-200/60 shadow-[0_0_20px_rgba(245,158,11,0.18)] group-hover:shadow-[0_0_28px_rgba(245,158,11,0.32)] transition-shadow duration-500">
@@ -66,7 +73,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         />
 
         {/* Top Badges Overlay */}
-        <div className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none">
+        <div className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none z-10">
           <div className="flex flex-col gap-1.5">
             {discountPercent && (
               <span className="inline-block bg-red-600 text-white font-extrabold text-[11px] px-2.5 py-1 rounded-md shadow-md uppercase tracking-wider">
@@ -100,18 +107,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         </div>
 
-        {/* Quick View Hover Overlay */}
-        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3 backdrop-blur-[1px]">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewProduct(product);
-            }}
-            className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 text-gray-900 font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transform -translate-y-2 group-hover:translate-y-0 transition-all duration-300"
-          >
-            <Eye className="w-4 h-4 text-amber-600" />
-            <span>Quick View</span>
-          </button>
+        {/* Clearly Visible "ALLOWED TO OPEN PARCEL" Badge on Product Image */}
+        <div className="absolute bottom-2.5 left-2.5 right-2.5 z-20 pointer-events-none">
+          <div className="bg-black/95 backdrop-blur-xs text-yellow-400 border border-yellow-400/90 py-1.5 px-2 sm:px-2.5 rounded-xl shadow-lg flex items-center justify-center gap-1.5 text-center transition-transform group-hover:scale-[1.02]">
+            <PackageCheck className="w-3.5 h-3.5 text-yellow-400 shrink-0 stroke-[2.5]" />
+            <span className="font-black text-[9.5px] sm:text-[10.5px] tracking-wide text-yellow-400 uppercase drop-shadow-xs whitespace-nowrap">
+              ALLOWED TO OPEN PARCEL
+            </span>
+          </div>
         </div>
       </div>
 
@@ -140,6 +143,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
+        {/* ALLOWED TO OPEN PARCEL Badge in Card Content */}
+        <div className="flex items-center">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black text-yellow-400 border border-yellow-400/90 text-[10px] font-black uppercase tracking-wider shadow-2xs">
+            <PackageCheck className="w-3 h-3 text-yellow-400 shrink-0 stroke-[2.5]" />
+            <span>ALLOWED TO OPEN PARCEL</span>
+          </span>
+        </div>
+
         {/* Available Sizes List */}
         <div>
           <div className="text-[11px] text-gray-500 mb-1.5 font-medium flex items-center justify-between">
@@ -158,35 +169,39 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Exactly Two Buttons Side by Side: Order on WhatsApp & Buy Now */}
         <div className="pt-2 grid grid-cols-2 gap-2">
           
-          {/* View Product Button */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewProduct(product);
-            }}
-            className="w-full py-2.5 px-2 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-800 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
-          >
-            <Eye className="w-3.5 h-3.5 text-amber-600" />
-            <span>View Details</span>
-          </button>
-
-          {/* WhatsApp Order Button */}
+          {/* 1. Order on WhatsApp Button - Green button with WhatsApp icon */}
           <button
             type="button"
             onClick={handleWhatsAppClick}
             disabled={isOutOfStock}
-            className={`w-full py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all ${
+            className={`w-full py-2.5 px-1.5 sm:px-2 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer ${
               isOutOfStock
                 ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
-                : 'bg-[#25D366] hover:bg-[#20ba59] text-white shadow-green-600/20 hover:scale-[1.02]'
+                : 'bg-[#25D366] hover:bg-[#20ba59] text-white shadow-green-600/20 hover:scale-[1.02] active:scale-[0.98]'
             }`}
+            title="Order directly on WhatsApp"
           >
-            <MessageCircle className="w-3.5 h-3.5 fill-white" />
-            <span>WhatsApp</span>
+            <MessageCircle className="w-4 h-4 fill-white shrink-0" />
+            <span className="truncate">Order on WhatsApp</span>
+          </button>
+
+          {/* 2. Buy Now Button - Yellow button with black text matching black and yellow theme */}
+          <button
+            type="button"
+            onClick={handleBuyNowClick}
+            disabled={isOutOfStock}
+            className={`w-full py-2.5 px-1.5 sm:px-2 rounded-xl font-extrabold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer ${
+              isOutOfStock
+                ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                : 'bg-yellow-400 hover:bg-yellow-500 text-black border border-yellow-500 shadow-yellow-500/20 hover:scale-[1.02] active:scale-[0.98]'
+            }`}
+            title="Buy Now - Instant Checkout"
+          >
+            <Zap className="w-3.5 h-3.5 fill-black shrink-0" />
+            <span className="truncate">Buy Now</span>
           </button>
 
         </div>

@@ -38,8 +38,9 @@ export interface Order {
   shippingFee: number;
   finalAmount: number;
   paymentScreenshot?: string;
-  status: 'Pending' | 'Confirmed' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'New' | 'Printed' | 'Booked' | 'Dispatched' | 'Delivered' | 'Cancelled' | 'Pending' | 'Confirmed' | 'Shipped';
   createdAt: string;
+  printedAt?: string;
   // MNP Courier Integration Fields
   trackingNumber?: string;
   courierCompany?: string;
