@@ -25,7 +25,14 @@ import {
   Copy,
   ExternalLink,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Mail,
+  KeyRound,
+  CheckCircle2,
+  ArrowLeft,
+  AlertCircle,
+  Info,
+  RefreshCw
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { Product, Order } from '../../types';
@@ -66,11 +73,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     connectMNP,
     disconnectMNP,
     prepareMNPShipmentBooking,
+    requestPasswordResetOTP,
+    verifyPasswordResetOTP,
+    resetAdminPassword,
+    getRecoveryStatus,
   } = useStore();
 
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'banners' | 'categories' | 'courier' | 'security'>('overview');
+
+  // Password Recovery state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'request' | 'verify'>('request');
+  const [recoveryEmail, setRecoveryEmail] = useState('zarrichappal@gmail.com');
+  const [recoveryOtp, setRecoveryOtp] = useState('');
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState('Hasnain295@');
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState('Hasnain295@');
+  const [recoveryResetToken, setRecoveryResetToken] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
+  const [deliveryConfig, setDeliveryConfig] = useState<any>(null);
+
+  // Fetch recovery status when recovery modal is opened
+  const loadRecoveryConfig = async () => {
+    try {
+      const res = await getRecoveryStatus();
+      if (res?.emailDelivery) {
+        setDeliveryConfig(res.emailDelivery);
+      }
+    } catch {}
+  };
 
   // MNP Courier shipment booking state
   const [bookingOrder, setBookingOrder] = useState<Order | null>(null);
@@ -118,6 +152,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   const [adminProductPage, setAdminProductPage] = useState(1);
   const [adminProductsPerPage, setAdminProductsPerPage] = useState<number>(50);
   const [isOptimizingImage, setIsOptimizingImage] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Close Product Modal & reset editing state safely
   const handleCloseProductModal = () => {
@@ -129,14 +164,92 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   if (!isOpen) return null;
 
   // Handle Login
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    const success = loginAdmin(passwordInput);
-    if (!success) {
-      setLoginError('Invalid password. Please enter your valid admin password.');
-    } else {
-      setPasswordInput('');
+    setIsLoggingIn(true);
+    try {
+      const success = await loginAdmin(passwordInput);
+      if (!success) {
+        setLoginError('Invalid password. Please enter your valid admin password.');
+      } else {
+        setPasswordInput('');
+      }
+    } catch {
+      setLoginError('Authentication error. Please check your credentials and try again.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // Handle Request OTP
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setRecoveryError('');
+    setRecoveryMessage('');
+    setRecoveryLoading(true);
+
+    try {
+      const res = await requestPasswordResetOTP(recoveryEmail);
+      if (res.success) {
+        setRecoveryMessage(res.message || 'OTP dispatched to zarrichappal@gmail.com.');
+        setForgotStep('verify');
+      } else {
+        setRecoveryError(res.error || 'Failed to send OTP code.');
+        if (res.configStatus) {
+          setDeliveryConfig(res.configStatus);
+        }
+      }
+    } catch (err: any) {
+      setRecoveryError(err.message || 'Failed to send OTP code.');
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
+  // Handle Reset Password Submit
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError('');
+    setRecoveryMessage('');
+
+    if (!recoveryOtp || recoveryOtp.trim().length !== 6) {
+      setRecoveryError('Please enter a valid 6-digit OTP code.');
+      return;
+    }
+    if (!recoveryNewPassword || recoveryNewPassword.trim().length < 6) {
+      setRecoveryError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (recoveryNewPassword !== recoveryConfirmPassword) {
+      setRecoveryError('New password and confirmation do not match.');
+      return;
+    }
+
+    setRecoveryLoading(true);
+    try {
+      const res = await resetAdminPassword(
+        recoveryEmail,
+        recoveryOtp.trim(),
+        recoveryNewPassword.trim(),
+        recoveryResetToken
+      );
+
+      if (res.success) {
+        setRecoveryMessage(res.message || 'Password reset successfully! You can now log in.');
+        setPasswordInput(recoveryNewPassword.trim());
+        setTimeout(() => {
+          setShowForgotPassword(false);
+          setForgotStep('request');
+          setRecoveryOtp('');
+        }, 2200);
+      } else {
+        setRecoveryError(res.error || 'Password reset failed. Please check your OTP.');
+      }
+    } catch (err: any) {
+      setRecoveryError(err.message || 'Network error resetting password.');
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -455,51 +568,274 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
         
         {/* If NOT Admin Logged In: Show Passcode Gate */}
         {!isAdmin ? (
-          <div className="max-w-md mx-auto my-12 bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-5 text-center animate-in fade-in">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 mx-auto">
-              <Lock className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-1">
-              <h2 className="text-xl font-bold font-serif-luxury text-gray-900">
-                Admin Authentication
-              </h2>
-              <p className="text-xs text-gray-500">
-                Authorized store managers only. Enter your store management passcode to access products, orders, and banner settings.
-              </p>
-            </div>
-
-            {loginError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2 text-left">
-                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter Admin Password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-center text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-amber-500 tracking-widest transition-colors font-mono"
-                  autoFocus
-                />
-                <span className="text-[10px] text-gray-500 mt-1.5 block">
-                  Protected store administration. Enter your password to unlock the portal.
-                </span>
+          showForgotPassword ? (
+            /* Forgot Password / OTP Recovery View */
+            <div className="max-w-md mx-auto my-12 bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-5 text-center animate-in fade-in">
+              <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 mx-auto">
+                <KeyRound className="w-8 h-8" />
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-white font-extrabold text-sm shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-              >
-                Access Admin Dashboard
-              </button>
-            </form>
-          </div>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold font-serif-luxury text-gray-900">
+                  Admin Password Recovery
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Reset your administrator password using a verified 6-digit OTP code.
+                </p>
+              </div>
+
+              {/* Registered Recovery Email Notice */}
+              <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-left space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                  <Mail className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Registered Recovery Email:</span>
+                </div>
+                <div className="font-mono text-xs font-bold text-gray-900 break-all pl-6">
+                  {recoveryEmail}
+                </div>
+                <div className="text-[10px] text-gray-500 pl-6">
+                  OTP codes expire after 10 minutes and can only be used once.
+                </div>
+              </div>
+
+              {/* Configuration Notice if Email Delivery is unconfigured */}
+              {deliveryConfig && !deliveryConfig.isConfigured && (
+                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-300 text-left text-xs text-amber-950 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Email Delivery Configuration Notice</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-900">
+                    To deliver live OTP emails to <strong>{recoveryEmail}</strong>, configure <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">SMTP_USER</code> and <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">SMTP_PASS</code> in your server environment variables.
+                  </p>
+                </div>
+              )}
+
+              {/* Feedback messages */}
+              {recoveryError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 text-left">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>{recoveryError}</span>
+                </div>
+              )}
+
+              {recoveryMessage && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-2 text-left">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>{recoveryMessage}</span>
+                </div>
+              )}
+
+              {forgotStep === 'request' ? (
+                /* Step 1: Request OTP */
+                <div className="space-y-4 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleRequestOtp}
+                    disabled={recoveryLoading}
+                    className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-white font-extrabold text-sm shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {recoveryLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Sending 6-Digit OTP...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="w-4 h-4" />
+                        <span>Send 6-Digit OTP Code</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotStep('verify');
+                      setRecoveryError('');
+                      setRecoveryMessage('');
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-800 underline block mx-auto cursor-pointer"
+                  >
+                    Already have a 6-digit OTP? Enter code
+                  </button>
+                </div>
+              ) : (
+                /* Step 2: Verify OTP & Set New Password (Hasnain295@) */
+                <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5 text-left pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Enter 6-Digit OTP Code
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      pattern="[0-9]{6}"
+                      placeholder="e.g. 583921"
+                      value={recoveryOtp}
+                      onChange={(e) => setRecoveryOtp(e.target.value.replace(/\D/g, ''))}
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 text-center text-base tracking-widest font-mono text-gray-900 focus:outline-none focus:border-amber-500"
+                      autoFocus
+                    />
+                    <span className="text-[10px] text-gray-500 block mt-1">
+                      Check your inbox at {recoveryEmail} (valid for 10 minutes).
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-gray-700">
+                        New Admin Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecoveryNewPassword('Hasnain295@');
+                          setRecoveryConfirmPassword('Hasnain295@');
+                        }}
+                        className="text-[10px] text-amber-700 font-bold hover:underline cursor-pointer"
+                      >
+                        Use Required: Hasnain295@
+                      </button>
+                    </div>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Enter new password (Hasnain295@)"
+                      value={recoveryNewPassword}
+                      onChange={(e) => setRecoveryNewPassword(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2 text-sm text-gray-900 focus:outline-none focus:border-amber-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Confirm new password"
+                      value={recoveryConfirmPassword}
+                      onChange={(e) => setRecoveryConfirmPassword(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2 text-sm text-gray-900 focus:outline-none focus:border-amber-500 font-mono"
+                    />
+                  </div>
+
+                  <div className="pt-2 space-y-2">
+                    <button
+                      type="submit"
+                      disabled={recoveryLoading || recoveryOtp.length !== 6}
+                      className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-white font-extrabold text-sm shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {recoveryLoading ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Verifying & Resetting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Verify OTP & Reset Password</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setForgotStep('request')}
+                      className="w-full py-2 text-xs text-gray-500 hover:text-gray-800 text-center block cursor-pointer"
+                    >
+                      Resend OTP Code
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Back to Login */}
+              <div className="pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setRecoveryError('');
+                    setRecoveryMessage('');
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to Admin Login</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Standard Admin Login View */
+            <div className="max-w-md mx-auto my-12 bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-5 text-center animate-in fade-in">
+              <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 mx-auto">
+                <Lock className="w-8 h-8" />
+              </div>
+
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold font-serif-luxury text-gray-900">
+                  Admin Authentication
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Authorized store managers only. Enter your store management passcode to access products, orders, and banner settings.
+                </p>
+              </div>
+
+              {loginError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2 text-left">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <div>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter Admin Password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-center text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-amber-500 tracking-widest transition-colors font-mono"
+                    autoFocus
+                  />
+                  <span className="text-[10px] text-gray-500 mt-1.5 block">
+                    Protected store administration. Enter your password to unlock the portal.
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoggingIn}
+                  className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-white font-extrabold text-sm shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+                >
+                  {isLoggingIn ? 'Verifying Admin Password...' : 'Access Admin Dashboard'}
+                </button>
+
+                {/* Forgot Password Link */}
+                <div className="pt-2 flex items-center justify-between border-t border-gray-100 text-xs text-gray-500">
+                  <span>Forgot your password?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(true);
+                      setRecoveryError('');
+                      setRecoveryMessage('');
+                      loadRecoveryConfig();
+                    }}
+                    className="font-semibold text-amber-700 hover:text-amber-800 hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Reset via Email</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )
         ) : (
           /* Logged In Admin Panel */
           <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">

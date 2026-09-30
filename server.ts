@@ -24,18 +24,23 @@ const PRODUCTS_FILE = path.join(DATA_DIR, 'products_db.json');
 const CATEGORIES_FILE = path.join(DATA_DIR, 'categories_db.json');
 const ORDERS_FILE = path.join(DATA_DIR, 'orders_db.json');
 
-const VALID_ADMIN_PASSWORDS = ['admin123', '03432782295', 'hasnain786'];
+import {
+  verifyAdminMiddleware,
+  loginAdminBackend,
+  verifyAdminToken,
+  changeAdminPasswordBackend,
+  revokeAdminToken,
+  ensureAdminAuthInitialized,
+  ADMIN_RECOVERY_EMAIL,
+  REQUIRED_POST_RESET_PASSWORD,
+  getEmailDeliveryConfigStatus,
+  requestPasswordResetOTP,
+  verifyPasswordResetOTP,
+  resetAdminPasswordWithOTP,
+} from './src/server/auth.ts';
 
-// Admin authentication verification
-function verifyAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const authHeader = req.headers['authorization'] || req.headers['x-admin-token'];
-  const token = typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
-  
-  if (VALID_ADMIN_PASSWORDS.includes(token) || (token && token.length >= 6)) {
-    return next();
-  }
-  return res.status(401).json({ error: 'Unauthorized: Admin authentication required' });
-}
+// Ensure backend admin authentication credentials are initialized securely
+ensureAdminAuthInitialized();
 
 // Helper to safely read JSON file
 function readJsonFile<T>(filePath: string, fallback: T): T {
@@ -70,14 +75,100 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// GET all products
+// --- ADMIN AUTHENTICATION ENDPOINTS (Backend Protected) ---
+
+// POST Admin Login
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body || {};
+  const result = loginAdminBackend(password);
+  if (!result.success) {
+    return res.status(401).json({ error: result.error || 'Invalid admin password' });
+  }
+  return res.json({ success: true, token: result.token, message: 'Admin authentication successful' });
+});
+
+// GET Admin Verify Token
+app.get('/api/admin/verify', (req, res) => {
+  const authHeader = req.headers['authorization'] || req.headers['x-admin-token'];
+  const token = typeof authHeader === 'string' ? authHeader : '';
+  if (verifyAdminToken(token)) {
+    return res.json({ authenticated: true });
+  }
+  return res.status(401).json({ authenticated: false, error: 'Unauthorized: Invalid or expired admin session' });
+});
+
+// POST Admin Logout
+app.post('/api/admin/logout', (req, res) => {
+  const authHeader = req.headers['authorization'] || req.headers['x-admin-token'];
+  const token = typeof authHeader === 'string' ? authHeader : '';
+  revokeAdminToken(token);
+  return res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// POST Admin Change Password
+app.post('/api/admin/change-password', verifyAdminMiddleware, (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  const result = changeAdminPasswordBackend(currentPassword, newPassword);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error || 'Failed to update admin password' });
+  }
+  return res.json({ success: true, message: result.message });
+});
+
+// GET Admin Password Recovery Status & Email Delivery Service Configuration
+app.get('/api/admin/recovery-status', (req, res) => {
+  const config = getEmailDeliveryConfigStatus();
+  return res.json({
+    registeredEmail: ADMIN_RECOVERY_EMAIL,
+    requiredPostResetPassword: REQUIRED_POST_RESET_PASSWORD,
+    emailDelivery: config,
+  });
+});
+
+// POST Request 6-digit OTP to zarrichappal@gmail.com
+app.post('/api/admin/request-password-reset', async (req, res) => {
+  const { email } = req.body || {};
+  const result = await requestPasswordResetOTP(email);
+  if (!result.success) {
+    // If delivery service isn't configured, return 503 Service Unavailable with setup instructions
+    const statusCode = result.configStatus && !result.configStatus.isConfigured ? 503 : 400;
+    return res.status(statusCode).json({
+      success: false,
+      error: result.error,
+      configStatus: result.configStatus,
+    });
+  }
+  return res.json({ success: true, message: result.message });
+});
+
+// POST Verify 6-digit OTP
+app.post('/api/admin/verify-reset-otp', (req, res) => {
+  const { email, otp } = req.body || {};
+  const result = verifyPasswordResetOTP(email, otp);
+  if (!result.success) {
+    return res.status(400).json({ success: false, error: result.error });
+  }
+  return res.json({ success: true, resetToken: result.resetToken });
+});
+
+// POST Reset Password with Verified OTP
+app.post('/api/admin/reset-password', (req, res) => {
+  const { email, otp, newPassword, resetToken } = req.body || {};
+  const result = resetAdminPasswordWithOTP(email, otp, newPassword, resetToken);
+  if (!result.success) {
+    return res.status(400).json({ success: false, error: result.error });
+  }
+  return res.json({ success: true, message: result.message });
+});
+
+// GET all products (Public catalog)
 app.get('/api/products', (req, res) => {
   const products = readJsonFile<any[]>(PRODUCTS_FILE, []);
   res.json(products);
 });
 
-// POST add a new product (Creates new record, never overwrites existing)
-app.post('/api/products', (req, res) => {
+// POST add a new product (Admin Only)
+app.post('/api/products', verifyAdminMiddleware, (req, res) => {
   const productData = req.body;
   if (!productData || !productData.title) {
     return res.status(400).json({ error: 'Product title is required' });
@@ -104,8 +195,8 @@ app.post('/api/products', (req, res) => {
   res.status(201).json(newProduct);
 });
 
-// PUT update an existing product (Modifies only the specific product)
-app.put('/api/products/:id', (req, res) => {
+// PUT update an existing product (Admin Only)
+app.put('/api/products/:id', verifyAdminMiddleware, (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   const products = readJsonFile<any[]>(PRODUCTS_FILE, []);
@@ -135,8 +226,8 @@ app.put('/api/products/:id', (req, res) => {
   res.json(updatedProduct);
 });
 
-// DELETE a product (Deletes only the specific product)
-app.delete('/api/products/:id', (req, res) => {
+// DELETE a product (Admin Only)
+app.delete('/api/products/:id', verifyAdminMiddleware, (req, res) => {
   const { id } = req.params;
   const products = readJsonFile<any[]>(PRODUCTS_FILE, []);
   const filtered = products.filter((p) => p.id !== id);
@@ -145,8 +236,8 @@ app.delete('/api/products/:id', (req, res) => {
   res.json({ success: true, id });
 });
 
-// POST bulk sync / seed products
-app.post('/api/products/sync', (req, res) => {
+// POST bulk sync / seed products (Admin Only)
+app.post('/api/products/sync', verifyAdminMiddleware, (req, res) => {
   const { products } = req.body;
   if (!Array.isArray(products)) {
     return res.status(400).json({ error: 'Expected products array' });
@@ -165,14 +256,14 @@ app.post('/api/products/sync', (req, res) => {
   res.json({ success: true, count: merged.length });
 });
 
-// GET categories
+// GET categories (Public)
 app.get('/api/categories', (req, res) => {
   const categories = readJsonFile<string[]>(CATEGORIES_FILE, []);
   res.json(categories);
 });
 
-// POST add category
-app.post('/api/categories', (req, res) => {
+// POST add category (Admin Only)
+app.post('/api/categories', verifyAdminMiddleware, (req, res) => {
   const { category } = req.body;
   if (!category || typeof category !== 'string') {
     return res.status(400).json({ error: 'Category string required' });
@@ -188,8 +279,8 @@ app.post('/api/categories', (req, res) => {
   res.json({ success: true, categories });
 });
 
-// DELETE category
-app.delete('/api/categories/:name', (req, res) => {
+// DELETE category (Admin Only)
+app.delete('/api/categories/:name', verifyAdminMiddleware, (req, res) => {
   const { name } = req.params;
   const categories = readJsonFile<string[]>(CATEGORIES_FILE, []);
   const filtered = categories.filter((c) => c !== decodeURIComponent(name));
@@ -200,7 +291,7 @@ app.delete('/api/categories/:name', (req, res) => {
 // --- ORDERS API (Persistent Database with Validation & Security) ---
 
 // GET all orders (Admin only, newest first)
-app.get('/api/orders', verifyAdmin, (req, res) => {
+app.get('/api/orders', verifyAdminMiddleware, (req, res) => {
   const orders = readJsonFile<any[]>(ORDERS_FILE, []);
   // Sort newest first by createdAt timestamp
   orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -288,7 +379,7 @@ app.post('/api/orders', (req, res) => {
 });
 
 // PUT update order status
-app.put('/api/orders/:id/status', verifyAdmin, (req, res) => {
+app.put('/api/orders/:id/status', verifyAdminMiddleware, (req, res) => {
   const { id } = req.params;
   const { status, trackingNumber, courierBookingStatus, printedAt } = req.body;
 
@@ -320,7 +411,7 @@ app.put('/api/orders/:id/status', verifyAdmin, (req, res) => {
 });
 
 // PUT update entire order
-app.put('/api/orders/:id', verifyAdmin, (req, res) => {
+app.put('/api/orders/:id', verifyAdminMiddleware, (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   const orders = readJsonFile<any[]>(ORDERS_FILE, []);
@@ -341,7 +432,7 @@ app.put('/api/orders/:id', verifyAdmin, (req, res) => {
 });
 
 // DELETE order
-app.delete('/api/orders/:id', verifyAdmin, (req, res) => {
+app.delete('/api/orders/:id', verifyAdminMiddleware, (req, res) => {
   const { id } = req.params;
   const orders = readJsonFile<any[]>(ORDERS_FILE, []);
   const filtered = orders.filter((o) => o.id !== id);

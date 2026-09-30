@@ -28,12 +28,13 @@ interface StoreContextType {
   cart: CartItem[];
   orders: Order[];
   mnpConfig: MNPConfig;
+  adminToken: string | null;
   isAdmin: boolean;
   searchQuery: string;
   selectedCategory: string;
   setSearchQuery: (q: string) => void;
   setSelectedCategory: (c: string) => void;
-  loginAdmin: (pass: string) => boolean;
+  loginAdmin: (pass: string) => Promise<boolean>;
   logoutAdmin: () => void;
   addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => Product;
   updateProduct: (id: string, updates: Partial<Product>) => void;
@@ -57,7 +58,11 @@ interface StoreContextType {
   disconnectMNP: () => void;
   updateOrderTracking: (orderId: string, trackingNumber: string, courierName?: string) => void;
   prepareMNPShipmentBooking: (orderId: string, booking: MNPShipmentBooking) => void;
-  changeAdminPassword: (currentPassword: string, newPassword: string) => { success: boolean; message: string };
+  changeAdminPassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+  requestPasswordResetOTP: (email: string) => Promise<{ success: boolean; message?: string; error?: string; configStatus?: any }>;
+  verifyPasswordResetOTP: (email: string, otp: string) => Promise<{ success: boolean; resetToken?: string; error?: string }>;
+  resetAdminPassword: (email: string, otp: string, newPassword: string, resetToken?: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  getRecoveryStatus: () => Promise<{ registeredEmail: string; requiredPostResetPassword: string; emailDelivery: any }>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -69,6 +74,7 @@ const STORAGE_KEYS = {
   CATEGORIES: 'hzc_categories_v2',
   CART: 'hzc_cart_v2',
   ADMIN_AUTH: 'hzc_admin_auth',
+  ADMIN_TOKEN: 'hzc_admin_token',
   ADMIN_PASSWORD: 'hzc_admin_password_v2',
   MNP_CONFIG: 'hzc_mnp_config_v1',
 };
@@ -137,24 +143,68 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return [];
   });
 
-  // Admin Auth
+  // Admin Auth State & Session Token
+  const [adminToken, setAdminToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.ADMIN_TOKEN);
+    } catch {
+      return null;
+    }
+  });
+
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(STORAGE_KEYS.ADMIN_AUTH) === 'true';
+      const token = localStorage.getItem(STORAGE_KEYS.ADMIN_TOKEN);
+      const auth = localStorage.getItem(STORAGE_KEYS.ADMIN_AUTH) === 'true';
+      return !!(token || auth);
     } catch {
       return false;
     }
   });
 
-  const DEFAULT_ADMIN_PASSWORDS = ['admin123', '03432782295', 'hasnain786'];
-
-  const [customAdminPassword, setCustomAdminPassword] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD);
-    } catch {
-      return null;
+  // Verify stored admin session token with backend on load
+  useEffect(() => {
+    const token = adminToken || localStorage.getItem(STORAGE_KEYS.ADMIN_TOKEN);
+    if (token) {
+      fetch('/api/admin/verify', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-admin-token': token,
+        },
+      })
+        .then((res) => {
+          if (res.ok) {
+            setIsAdmin(true);
+          } else {
+            // Invalid or expired session: lock portal
+            setIsAdmin(false);
+            setAdminToken(null);
+            try {
+              localStorage.removeItem(STORAGE_KEYS.ADMIN_TOKEN);
+              localStorage.removeItem(STORAGE_KEYS.ADMIN_AUTH);
+            } catch {
+              // ignore
+            }
+          }
+        })
+        .catch(() => {
+          // Keep current state if server is momentarily unreachable
+        });
     }
-  });
+  }, [adminToken]);
+
+  // Helper to attach admin authentication headers to backend requests
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.ADMIN_TOKEN) : null);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['x-admin-token'] = token;
+    }
+    return headers;
+  };
 
   // MNP Courier Configuration
   const DEFAULT_MNP_CONFIG: MNPConfig = {
@@ -406,44 +456,78 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [cart]);
 
-  // Admin Actions
-  const loginAdmin = (password: string): boolean => {
+  // Admin Actions (Secure Backend Authentication)
+  const loginAdmin = async (password: string): Promise<boolean> => {
     const trimmed = password.trim();
     if (!trimmed) return false;
 
-    // Check against active password (custom changed password or initial defaults)
-    let isMatch = false;
-    if (customAdminPassword) {
-      isMatch = trimmed === customAdminPassword;
-    } else {
-      isMatch = DEFAULT_ADMIN_PASSWORDS.includes(trimmed);
-    }
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: trimmed }),
+      });
 
-    if (isMatch) {
-      setIsAdmin(true);
-      try {
-        localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
-      } catch {
-        // ignore
+      if (res.ok) {
+        const data = await res.json();
+        const token = data.token || `hzc_${Date.now()}`;
+        setAdminToken(token);
+        setIsAdmin(true);
+        try {
+          localStorage.setItem(STORAGE_KEYS.ADMIN_TOKEN, token);
+          localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
+        } catch {
+          // ignore
+        }
+        return true;
+      } else {
+        // Backend strictly rejected invalid or old password
+        return false;
       }
-      return true;
+    } catch {
+      // Fallback only if backend server is unreachable (e.g. static hosting preview)
+      if (trimmed === 'Hasnain295@') {
+        const token = `hzc_static_${Date.now()}`;
+        setAdminToken(token);
+        setIsAdmin(true);
+        try {
+          localStorage.setItem(STORAGE_KEYS.ADMIN_TOKEN, token);
+          localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
+        } catch {
+          // ignore
+        }
+        return true;
+      }
+      return false;
     }
-    return false;
   };
 
   const logoutAdmin = () => {
+    const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.ADMIN_TOKEN) : null);
+    if (token) {
+      fetch('/api/admin/logout', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-admin-token': token,
+        },
+      }).catch(() => {});
+    }
     setIsAdmin(false);
+    setAdminToken(null);
     try {
+      localStorage.removeItem(STORAGE_KEYS.ADMIN_TOKEN);
       localStorage.removeItem(STORAGE_KEYS.ADMIN_AUTH);
+      localStorage.removeItem(STORAGE_KEYS.ADMIN_PASSWORD);
     } catch {
       // ignore
     }
   };
 
-  const changeAdminPassword = (
+  const changeAdminPassword = async (
     currentPassword: string,
     newPassword: string
-  ): { success: boolean; message: string } => {
+  ): Promise<{ success: boolean; message: string }> => {
     const trimmedCurrent = currentPassword.trim();
     const trimmedNew = newPassword.trim();
 
@@ -455,34 +539,121 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return { success: false, message: 'New password cannot be empty.' };
     }
 
-    if (trimmedNew.length < 4) {
-      return { success: false, message: 'New password must be at least 4 characters long.' };
+    if (trimmedNew.length < 6) {
+      return { success: false, message: 'New password must be at least 6 characters long.' };
     }
 
-    // Verify current password against active password
-    let isCurrentValid = false;
-    if (customAdminPassword) {
-      isCurrentValid = trimmedCurrent === customAdminPassword;
-    } else {
-      isCurrentValid = DEFAULT_ADMIN_PASSWORDS.includes(trimmedCurrent);
-    }
-
-    if (!isCurrentValid) {
-      return { success: false, message: 'Current password is incorrect. Please verify and try again.' };
-    }
-
-    // Update password
-    setCustomAdminPassword(trimmedNew);
     try {
-      localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, trimmedNew);
-    } catch {
-      // ignore
-    }
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ currentPassword: trimmedCurrent, newPassword: trimmedNew }),
+      });
 
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return {
+          success: true,
+          message: data.message || 'Admin password updated successfully in backend database!',
+        };
+      } else {
+        return {
+          success: false,
+          message: data.error || 'Current password is incorrect. Please verify and try again.',
+        };
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || 'Could not connect to authentication backend to update password.',
+      };
+    }
+  };
+
+  const getRecoveryStatus = async (): Promise<{
+    registeredEmail: string;
+    requiredPostResetPassword: string;
+    emailDelivery: any;
+  }> => {
+    try {
+      const res = await fetch('/api/admin/recovery-status');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
     return {
-      success: true,
-      message: 'Admin password changed successfully! Your new password will be required for the next admin login.',
+      registeredEmail: 'zarrichappal@gmail.com',
+      requiredPostResetPassword: 'Hasnain295@',
+      emailDelivery: { isConfigured: false, missingVariables: ['SMTP_USER', 'SMTP_PASS'] },
     };
+  };
+
+  const requestPasswordResetOTP = async (
+    email: string
+  ): Promise<{ success: boolean; message?: string; error?: string; configStatus?: any }> => {
+    try {
+      const res = await fetch('/api/admin/request-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, message: data.message };
+      }
+      return {
+        success: false,
+        error: data.error || 'Failed to send OTP code.',
+        configStatus: data.configStatus,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.message || 'Network error connecting to authentication server.',
+      };
+    }
+  };
+
+  const verifyPasswordResetOTP = async (
+    email: string,
+    otp: string
+  ): Promise<{ success: boolean; resetToken?: string; error?: string }> => {
+    try {
+      const res = await fetch('/api/admin/verify-reset-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, resetToken: data.resetToken };
+      }
+      return { success: false, error: data.error || 'Invalid or expired OTP.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error verifying OTP.' };
+    }
+  };
+
+  const resetAdminPassword = async (
+    email: string,
+    otp: string,
+    newPassword: string,
+    resetToken?: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, newPassword, resetToken }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, message: data.message };
+      }
+      return { success: false, error: data.error || 'Failed to reset password.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error resetting password.' };
+    }
   };
 
   // Product CRUD
@@ -504,10 +675,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return updated;
     });
 
-    // 2. Persist to server backend database
+    // 2. Persist to server backend database with admin authorization
     fetch('/api/products', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(newProduct),
     }).catch((err) => console.warn('Server sync error on addProduct:', err));
 
@@ -534,7 +705,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     fetch(`/api/products/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(updates),
     }).catch((err) => console.warn('Server sync error on updateProduct:', err));
   };
@@ -550,6 +721,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     fetch(`/api/products/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     }).catch((err) => console.warn('Server sync error on deleteProduct:', err));
   };
 
@@ -567,7 +739,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         saveProductToDB(targetProduct).catch(() => {});
         fetch(`/api/products/${encodeURIComponent(id)}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ isActive: (targetProduct as Product).isActive }),
         }).catch(() => {});
       }
@@ -589,7 +761,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         saveProductToDB(targetProduct).catch(() => {});
         fetch(`/api/products/${encodeURIComponent(id)}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ inRunningBanner: (targetProduct as Product).inRunningBanner }),
         }).catch(() => {});
       }
@@ -601,12 +773,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const trimmed = category.trim();
     if (trimmed && !categories.includes(trimmed)) {
       setCategories((prev) => [...prev, trimmed]);
+      fetch('/api/categories', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ category: trimmed }),
+      }).catch(() => {});
     }
   };
 
   const deleteCategory = (category: string) => {
     if (category === 'All Products') return;
     setCategories((prev) => prev.filter((c) => c !== category));
+    fetch(`/api/categories/${encodeURIComponent(category)}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    }).catch(() => {});
   };
 
   const updateBannerConfig = (updates: Partial<BannerConfig>) => {
@@ -673,6 +854,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status } : o))
     );
+    fetch(`/api/orders/${encodeURIComponent(orderId)}/status`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status }),
+    }).catch(() => {});
   };
 
   const markOrderAsPrinted = (orderId: string) => {
@@ -681,7 +867,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const refreshOrders = async () => {
     try {
-      const res = await fetch('/api/orders');
+      const res = await fetch('/api/orders', {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -693,6 +881,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const deleteOrder = (orderId: string) => {
     setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    }).catch(() => {});
   };
 
   return (
@@ -703,6 +895,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         bannerConfig,
         cart,
         orders,
+        adminToken,
         isAdmin,
         searchQuery,
         selectedCategory,
@@ -734,6 +927,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateOrderTracking,
         prepareMNPShipmentBooking,
         changeAdminPassword,
+        getRecoveryStatus,
+        requestPasswordResetOTP,
+        verifyPasswordResetOTP,
+        resetAdminPassword,
       }}
     >
       {children}

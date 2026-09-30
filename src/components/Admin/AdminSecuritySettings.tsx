@@ -42,7 +42,7 @@ export const AdminSecuritySettings: React.FC<AdminSecuritySettingsProps> = ({ on
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Handle password submit
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
 
@@ -72,18 +72,18 @@ export const AdminSecuritySettings: React.FC<AdminSecuritySettingsProps> = ({ on
     }
 
     // 3. Validation: minimum length
-    if (newPassword.length < 4) {
+    if (newPassword.length < 6) {
       setFeedback({
         type: 'error',
-        message: 'New password must be at least 4 characters long.',
+        message: 'New password must be at least 6 characters long.',
       });
       return;
     }
 
-    // 4. Change password through StoreContext
+    // 4. Change password through StoreContext and backend database
     setIsSubmitting(true);
     try {
-      const result = changeAdminPassword(currentPassword, newPassword);
+      const result = await changeAdminPassword(currentPassword, newPassword);
       if (result.success) {
         setFeedback({
           type: 'success',

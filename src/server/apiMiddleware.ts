@@ -2,6 +2,19 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { DEFAULT_INITIAL_PRODUCTS, DEFAULT_INITIAL_CATEGORIES } from './defaultData.ts';
+import {
+  verifyAdminToken,
+  loginAdminBackend,
+  changeAdminPasswordBackend,
+  revokeAdminToken,
+  ensureAdminAuthInitialized,
+  ADMIN_RECOVERY_EMAIL,
+  REQUIRED_POST_RESET_PASSWORD,
+  getEmailDeliveryConfigStatus,
+  requestPasswordResetOTP,
+  verifyPasswordResetOTP,
+  resetAdminPasswordWithOTP,
+} from './auth.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -94,6 +107,18 @@ export function createApiMiddleware() {
     res.setHeader('Content-Type', 'application/json');
 
     try {
+      // Helper to enforce admin authorization
+      const checkAdmin = (): boolean => {
+        const authHeader = req.headers?.['authorization'] || req.headers?.['x-admin-token'];
+        const token = typeof authHeader === 'string' ? authHeader : '';
+        if (!verifyAdminToken(token)) {
+          res.statusCode = 401;
+          res.end(JSON.stringify({ error: 'Unauthorized: Admin authentication required' }));
+          return false;
+        }
+        return true;
+      };
+
       // 1. /api/health
       if (url === '/api/health') {
         res.statusCode = 200;
@@ -101,8 +126,119 @@ export function createApiMiddleware() {
         return;
       }
 
-      // 2. /api/products/sync (POST)
+      // --- Admin Authentication Endpoints ---
+      if (url === '/api/admin/login' && method === 'POST') {
+        const body = await parseBody(req);
+        const result = loginAdminBackend(body.password);
+        if (!result.success) {
+          res.statusCode = 401;
+          res.end(JSON.stringify({ error: result.error || 'Invalid admin password' }));
+          return;
+        }
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, token: result.token, message: 'Admin authentication successful' }));
+        return;
+      }
+
+      if (url === '/api/admin/verify') {
+        const authHeader = req.headers?.['authorization'] || req.headers?.['x-admin-token'];
+        const token = typeof authHeader === 'string' ? authHeader : '';
+        if (verifyAdminToken(token)) {
+          res.statusCode = 200;
+          res.end(JSON.stringify({ authenticated: true }));
+          return;
+        }
+        res.statusCode = 401;
+        res.end(JSON.stringify({ authenticated: false, error: 'Unauthorized: Invalid or expired admin session' }));
+        return;
+      }
+
+      if (url === '/api/admin/logout' && method === 'POST') {
+        const authHeader = req.headers?.['authorization'] || req.headers?.['x-admin-token'];
+        const token = typeof authHeader === 'string' ? authHeader : '';
+        revokeAdminToken(token);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, message: 'Logged out successfully' }));
+        return;
+      }
+
+      if (url === '/api/admin/change-password' && method === 'POST') {
+        if (!checkAdmin()) return;
+        const body = await parseBody(req);
+        const result = changeAdminPasswordBackend(body.currentPassword, body.newPassword);
+        if (!result.success) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: result.error || 'Failed to update admin password' }));
+          return;
+        }
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, message: result.message }));
+        return;
+      }
+
+      // Password Recovery Endpoints
+      if (url === '/api/admin/recovery-status') {
+        const config = getEmailDeliveryConfigStatus();
+        res.statusCode = 200;
+        res.end(
+          JSON.stringify({
+            registeredEmail: ADMIN_RECOVERY_EMAIL,
+            requiredPostResetPassword: REQUIRED_POST_RESET_PASSWORD,
+            emailDelivery: config,
+          })
+        );
+        return;
+      }
+
+      if (url === '/api/admin/request-password-reset' && method === 'POST') {
+        const body = await parseBody(req);
+        const result = await requestPasswordResetOTP(body.email);
+        if (!result.success) {
+          const statusCode = result.configStatus && !result.configStatus.isConfigured ? 503 : 400;
+          res.statusCode = statusCode;
+          res.end(
+            JSON.stringify({
+              success: false,
+              error: result.error,
+              configStatus: result.configStatus,
+            })
+          );
+          return;
+        }
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, message: result.message }));
+        return;
+      }
+
+      if (url === '/api/admin/verify-reset-otp' && method === 'POST') {
+        const body = await parseBody(req);
+        const result = verifyPasswordResetOTP(body.email, body.otp);
+        if (!result.success) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ success: false, error: result.error }));
+          return;
+        }
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, resetToken: result.resetToken }));
+        return;
+      }
+
+      if (url === '/api/admin/reset-password' && method === 'POST') {
+        const body = await parseBody(req);
+        const result = resetAdminPasswordWithOTP(body.email, body.otp, body.newPassword, body.resetToken);
+        if (!result.success) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ success: false, error: result.error }));
+          return;
+        }
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, message: result.message }));
+        return;
+      }
+
+      // 2. /api/products/sync (POST - Admin Only)
       if (url === '/api/products/sync' && method === 'POST') {
+        if (!checkAdmin()) return;
         const body = await parseBody(req);
         const { products } = body;
         if (!Array.isArray(products)) {
@@ -134,6 +270,7 @@ export function createApiMiddleware() {
         }
 
         if (method === 'POST') {
+          if (!checkAdmin()) return;
           const productData = await parseBody(req);
           if (!productData || !productData.title) {
             res.statusCode = 400;
@@ -166,13 +303,14 @@ export function createApiMiddleware() {
         }
       }
 
-      // 4. /api/products/:id (PUT & DELETE)
+      // 4. /api/products/:id (PUT & DELETE - Admin Only)
       const productMatch = url.match(/^\/api\/products\/([^/?]+)/);
       if (productMatch && productMatch[1] && productMatch[1] !== 'sync') {
         const id = decodeURIComponent(productMatch[1]);
         const products = readJsonFile<any[]>(PRODUCTS_FILE, DEFAULT_INITIAL_PRODUCTS);
 
         if (method === 'PUT') {
+          if (!checkAdmin()) return;
           const updates = await parseBody(req);
           const index = products.findIndex((p) => p.id === id);
 
@@ -204,6 +342,7 @@ export function createApiMiddleware() {
         }
 
         if (method === 'DELETE') {
+          if (!checkAdmin()) return;
           const filtered = products.filter((p) => p.id !== id);
           writeJsonFile(PRODUCTS_FILE, filtered);
 
@@ -223,6 +362,7 @@ export function createApiMiddleware() {
         }
 
         if (method === 'POST') {
+          if (!checkAdmin()) return;
           const body = await parseBody(req);
           const { category } = body;
           if (!category || typeof category !== 'string') {
@@ -246,6 +386,7 @@ export function createApiMiddleware() {
 
       const catDeleteMatch = url.match(/^\/api\/categories\/([^/?]+)/);
       if (catDeleteMatch && method === 'DELETE') {
+        if (!checkAdmin()) return;
         const name = decodeURIComponent(catDeleteMatch[1]);
         const categories = readJsonFile<string[]>(CATEGORIES_FILE, DEFAULT_INITIAL_CATEGORIES);
         const filtered = categories.filter((c) => c !== name);

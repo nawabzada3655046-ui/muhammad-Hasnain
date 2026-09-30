@@ -1,3 +1,5 @@
+import preservedProducts from '../../data/products_db.json';
+
 export const DEFAULT_INITIAL_CATEGORIES = [
   "All Products",
   "Men's Chappal",
@@ -8,5 +10,6 @@ export const DEFAULT_INITIAL_CATEGORIES = [
   "Featured Products"
 ];
 
-// Clean state: all previously AI-generated sample/demo products removed.
-export const DEFAULT_INITIAL_PRODUCTS: any[] = [];
+// Preserved genuine handcrafted products from data/products_db.json
+export const DEFAULT_INITIAL_PRODUCTS: any[] = preservedProducts;
+

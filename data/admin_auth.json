@@ -1,0 +1,12 @@
+{
+  "salt": "9ef797b00bf0e85cd2cd23de745fc03f",
+  "hash": "4199ed11d1c988c778da02c8f4fb0a62992ec0692d520b007ac63858ff2d7ee155c6e5cfb6edc2cb11f0cbd815063ad72ea2a524b19676e44ade9f761bf2fbbb",
+  "updatedAt": "2026-09-30T10:51:19.633Z",
+  "activeTokens": {
+    "hzc_4bdcefd9fc36360bb9ea9eb43de2aaff788a2af225aaf9865454e8387169f767": {
+      "createdAt": "2026-09-30T10:51:19.641Z",
+      "expiresAt": "2026-10-07T10:51:19.641Z"
+    }
+  },
+  "passwordResetOTP": null
+}
