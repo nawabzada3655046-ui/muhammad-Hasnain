@@ -215,3 +215,22 @@ export async function deleteProductFromDB(id: string): Promise<void> {
     console.warn('Failed to delete product from IndexedDB:', err);
   }
 }
+
+/**
+ * Clear all products from IndexedDB during catalog reset.
+ */
+export async function clearAllProductsFromDB(): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(PRODUCTS_STORE, 'readwrite');
+      const store = tx.objectStore(PRODUCTS_STORE);
+      const request = store.clear();
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (err) {
+    console.warn('Failed to clear products from IndexedDB:', err);
+  }
+}

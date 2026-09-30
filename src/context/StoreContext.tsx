@@ -5,7 +5,8 @@ import {
   getAllProductsFromDB, 
   saveProductToDB, 
   saveAllProductsToDB, 
-  deleteProductFromDB 
+  deleteProductFromDB,
+  clearAllProductsFromDB
 } from '../utils/indexedDBStorage';
 
 /**
@@ -62,7 +63,7 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  PRODUCTS: 'hzc_products_v2',
+  PRODUCTS: 'hzc_products_v3',
   ORDERS: 'hzc_orders_v2',
   BANNER: 'hzc_banner_v2',
   CATEGORIES: 'hzc_categories_v2',
@@ -72,71 +73,18 @@ const STORAGE_KEYS = {
   MNP_CONFIG: 'hzc_mnp_config_v1',
 };
 
-// Seed an initial demo order so admin dashboard has realistic data out of the box
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: 'HZC-1082',
-    customerName: 'Muhammad Bilal Khan',
-    contactNumber: '03001234567',
-    whatsappNumber: '03001234567',
-    address: 'House # 42, Street 8, Sector F-8/2',
-    city: 'Islamabad',
-    postalCode: '44000',
-    specialInstructions: 'Please deliver after 2 PM. Ring bell twice.',
-    items: [
-      {
-        product: INITIAL_PRODUCTS[0],
-        selectedSize: 9,
-        quantity: 1,
-      },
-    ],
-    paymentMethod: 'advance',
-    subtotal: 3450,
-    discount: 172.5,
-    shippingFee: 0,
-    finalAmount: 3277.5,
-    paymentScreenshot: INITIAL_PRODUCTS[0].images[0],
-    status: 'Pending',
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: 'HZC-1081',
-    customerName: 'Usman Tariq',
-    contactNumber: '03219876543',
-    whatsappNumber: '03219876543',
-    address: 'Flat 304, Al-Madina Heights, Gulberg III',
-    city: 'Lahore',
-    postalCode: '54000',
-    specialInstructions: 'Call before delivery.',
-    items: [
-      {
-        product: INITIAL_PRODUCTS[1],
-        selectedSize: 8,
-        quantity: 1,
-      },
-    ],
-    paymentMethod: 'cod',
-    subtotal: 2850,
-    discount: 0,
-    shippingFee: 0,
-    finalAmount: 2850,
-    status: 'Confirmed',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-];
+// Initial orders initialized empty ready for customer checkout
+const INITIAL_ORDERS: Order[] = [];
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Products: initialized with INITIAL_PRODUCTS merged with saved products
+  // Products: initialized with genuine handcrafted store catalog
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const map = new Map<string, Product>();
-          INITIAL_PRODUCTS.forEach((p) => map.set(p.id, p));
-          parsed.forEach((p) => map.set(p.id, p));
-          return Array.from(map.values());
+          return parsed;
         }
       }
     } catch {
@@ -299,7 +247,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     async function syncInitialStorage() {
       const mergedMap = new Map<string, Product>();
 
-      // 1. Seed base with INITIAL_PRODUCTS
+      // 1. Seed base with INITIAL_PRODUCTS (contains all 20 genuine handcrafted products)
       INITIAL_PRODUCTS.forEach((p) => mergedMap.set(p.id, p));
 
       // 2. Read from LocalStorage
@@ -307,7 +255,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const localRaw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
         if (localRaw) {
           const parsed = JSON.parse(localRaw);
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             parsed.forEach((p) => {
               if (p && p.id) mergedMap.set(p.id, p);
             });
@@ -329,7 +277,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         console.warn('IndexedDB initial sync error:', e);
       }
 
-      // 4. Read from Server REST API (/api/products)
+      // 4. Read from Server REST API (/api/products), with static fallback for Netlify
       try {
         const res = await fetch('/api/products');
         if (res.ok) {
@@ -339,9 +287,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               if (p && p.id) mergedMap.set(p.id, p);
             });
           }
+        } else {
+          // Static fallback (Netlify / Static CDN)
+          const staticRes = await fetch('/products_db.json');
+          if (staticRes.ok) {
+            const staticProducts = await staticRes.json();
+            if (Array.isArray(staticProducts) && staticProducts.length > 0) {
+              staticProducts.forEach((p) => {
+                if (p && p.id) mergedMap.set(p.id, p);
+              });
+            }
+          }
         }
       } catch (err) {
-        console.warn('Server API read error during sync:', err);
+        try {
+          const staticRes = await fetch('/products_db.json');
+          if (staticRes.ok) {
+            const staticProducts = await staticRes.json();
+            if (Array.isArray(staticProducts) && staticProducts.length > 0) {
+              staticProducts.forEach((p) => {
+                if (p && p.id) mergedMap.set(p.id, p);
+              });
+            }
+          }
+        } catch {}
       }
 
       const allMerged = Array.from(mergedMap.values());
@@ -389,7 +358,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Persistence effect: ONLY runs after initial storage has loaded
   useEffect(() => {
-    if (!isStorageInitialized || products.length === 0) return;
+    if (!isStorageInitialized) return;
 
     // 1. Save to IndexedDB (asynchronous, supports hundreds/thousands of products and high-res images)
     saveAllProductsToDB(products).catch((e) => {
@@ -706,6 +675,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
   };
 
+  const markOrderAsPrinted = (orderId: string) => {
+    updateOrderStatus(orderId, 'Printed');
+  };
+
+  const refreshOrders = async () => {
+    try {
+      const res = await fetch('/api/orders');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setOrders(data);
+        }
+      }
+    } catch {}
+  };
+
   const deleteOrder = (orderId: string) => {
     setOrders((prev) => prev.filter((o) => o.id !== orderId));
   };
@@ -739,6 +724,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         clearCart,
         createOrder,
         updateOrderStatus,
+        markOrderAsPrinted,
+        refreshOrders,
         deleteOrder,
         mnpConfig,
         updateMNPConfig,

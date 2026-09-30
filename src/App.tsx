@@ -16,7 +16,7 @@ import { Footer } from './components/Footer';
 import { PolicyModals } from './components/PolicyModals';
 import { AdminDashboard } from './components/Admin/AdminDashboard';
 import { Product, Order } from './types';
-import { Sparkles, ChevronRight } from 'lucide-react';
+import { Sparkles, ChevronRight, PackageCheck } from 'lucide-react';
 
 function StoreMain() {
   const { 
@@ -243,16 +243,37 @@ function StoreMain() {
 
           {/* Catalog Grid */}
           {catalogProducts.length === 0 ? (
-            <div className="p-12 text-center bg-gray-50 border border-gray-200 rounded-3xl space-y-3">
-              <p className="text-base text-gray-600 font-medium">
-                No products found matching your current filter.
-              </p>
-              <button
-                onClick={() => { setSelectedCategory('All Products'); setSearchQuery(''); }}
-                className="px-5 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold uppercase shadow-sm cursor-pointer"
-              >
-                Reset Filters
-              </button>
+            <div className="p-12 sm:p-16 text-center bg-gray-50 border border-gray-200 rounded-3xl space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 shadow-xs">
+                <Sparkles className="w-8 h-8 fill-amber-400 text-amber-600" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-bold font-serif-luxury text-gray-900">
+                  {products.length === 0 ? 'Catalog Ready for Your New Products' : 'No products found'}
+                </h3>
+                <p className="text-sm text-gray-600 max-w-md mx-auto">
+                  {products.length === 0
+                    ? 'All previous sample products have been removed. Log in to the Admin Dashboard to add your genuine handcrafted Zarri Chappal & Khussa products.'
+                    : 'No products found matching your current filter. Try resetting your search or category filter.'}
+                </p>
+              </div>
+              {products.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setAdminOpen(true)}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-black hover:bg-neutral-800 text-yellow-400 text-xs font-bold uppercase tracking-wider shadow-md transition-all cursor-pointer border border-yellow-400/80"
+                >
+                  <PackageCheck className="w-4 h-4 text-yellow-400" />
+                  <span>Open Admin Panel to Add Products</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setSelectedCategory('All Products'); setSearchQuery(''); }}
+                  className="px-5 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold uppercase shadow-sm cursor-pointer hover:bg-amber-600 transition-colors"
+                >
+                  Reset Filters
+                </button>
+              )}
             </div>
           ) : (
             <>
