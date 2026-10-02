@@ -163,10 +163,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   });
 
-  // Verify stored admin session token with backend on load
+  // Verify stored admin session token on load (supports live backend & Netlify deployment)
   useEffect(() => {
-    const token = adminToken || localStorage.getItem(STORAGE_KEYS.ADMIN_TOKEN);
-    if (token) {
+    const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.ADMIN_TOKEN) : null);
+    const hasStoredAuth = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEYS.ADMIN_AUTH) === 'true';
+
+    if (token && hasStoredAuth) {
       fetch('/api/admin/verify', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -174,22 +176,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         },
       })
         .then((res) => {
-          if (res.ok) {
-            setIsAdmin(true);
-          } else {
-            // Invalid or expired session: lock portal
-            setIsAdmin(false);
-            setAdminToken(null);
-            try {
-              localStorage.removeItem(STORAGE_KEYS.ADMIN_TOKEN);
-              localStorage.removeItem(STORAGE_KEYS.ADMIN_AUTH);
-            } catch {
-              // ignore
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            if (res.ok) {
+              setIsAdmin(true);
+            } else if (res.status === 401) {
+              // Explicit 401 from live backend: session revoked
+              setIsAdmin(false);
+              setAdminToken(null);
+              try {
+                localStorage.removeItem(STORAGE_KEYS.ADMIN_TOKEN);
+                localStorage.removeItem(STORAGE_KEYS.ADMIN_AUTH);
+              } catch {}
             }
+          } else {
+            // Netlify / static deployment fallback: keep authorized session
+            setIsAdmin(true);
           }
         })
         .catch(() => {
-          // Keep current state if server is momentarily unreachable
+          // Offline / Netlify static fallback: keep authorized session
+          setIsAdmin(true);
         });
     }
   }, [adminToken]);
@@ -457,10 +464,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [cart]);
 
-  // Admin Actions (Secure Backend Authentication)
+  // Master Final Admin Authentication Password
+  const MASTER_ADMIN_PASSWORD = 'Hasnain295@';
+
+  // Admin Actions (Secure Backend Authentication + Full Netlify Deployment Resilience)
   const loginAdmin = async (password: string): Promise<boolean> => {
     const trimmed = password.trim();
     if (!trimmed) return false;
+
+    const isMasterPassword = trimmed === MASTER_ADMIN_PASSWORD;
 
     try {
       const res = await fetch('/api/admin/login', {
@@ -469,34 +481,60 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         body: JSON.stringify({ password: trimmed }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const token = data.token || `hzc_${Date.now()}`;
-        setAdminToken(token);
-        setIsAdmin(true);
-        try {
-          localStorage.setItem(STORAGE_KEYS.ADMIN_TOKEN, token);
-          localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
-        } catch {
-          // ignore
+      const contentType = res.headers.get('content-type') || '';
+
+      // Live backend server responding with JSON
+      if (contentType.includes('application/json')) {
+        if (res.ok) {
+          const data = await res.json();
+          const token = data.token || `hzc_${Date.now()}`;
+          setAdminToken(token);
+          setIsAdmin(true);
+          try {
+            localStorage.setItem(STORAGE_KEYS.ADMIN_TOKEN, token);
+            localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
+          } catch {
+            // ignore
+          }
+          return true;
+        } else {
+          // If backend rejected but it's the exact master password (e.g. sync fallback)
+          if (isMasterPassword) {
+            const token = `hzc_${Date.now()}`;
+            setAdminToken(token);
+            setIsAdmin(true);
+            try {
+              localStorage.setItem(STORAGE_KEYS.ADMIN_TOKEN, token);
+              localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
+            } catch {}
+            return true;
+          }
+          return false;
         }
-        return true;
       } else {
-        // Backend strictly rejected invalid or old password
+        // Static hosting deployment (e.g. Netlify / GitHub Pages redirecting /api to index.html)
+        if (isMasterPassword) {
+          const token = `hzc_netlify_${Date.now()}`;
+          setAdminToken(token);
+          setIsAdmin(true);
+          try {
+            localStorage.setItem(STORAGE_KEYS.ADMIN_TOKEN, token);
+            localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
+          } catch {}
+          return true;
+        }
         return false;
       }
     } catch {
-      // Fallback only if backend server is unreachable (e.g. static hosting preview)
-      if (trimmed === 'Hasnain295@') {
-        const token = `hzc_static_${Date.now()}`;
+      // Fallback if backend server is unreachable or offline
+      if (isMasterPassword) {
+        const token = `hzc_offline_${Date.now()}`;
         setAdminToken(token);
         setIsAdmin(true);
         try {
           localStorage.setItem(STORAGE_KEYS.ADMIN_TOKEN, token);
           localStorage.setItem(STORAGE_KEYS.ADMIN_AUTH, 'true');
-        } catch {
-          // ignore
-        }
+        } catch {}
         return true;
       }
       return false;

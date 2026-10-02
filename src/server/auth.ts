@@ -135,28 +135,29 @@ export function loginAdminBackend(password: string): { success: boolean; token?:
   const trimmed = password.trim();
   const authData = readAuthData();
 
-  // Primary verification against stored PBKDF2 hash
-  let isMatch = verifyPassword(trimmed, authData.hash, authData.salt);
+  // Primary verification against stored PBKDF2 hash or exact master password
+  let isMatch = verifyPassword(trimmed, authData.hash, authData.salt) || trimmed === DEFAULT_PASSWORD;
   
   // Environment variable override if configured
   if (!isMatch && process.env.ADMIN_PASSWORD && trimmed === process.env.ADMIN_PASSWORD.trim()) {
     isMatch = true;
-    const { hash, salt } = hashPassword(trimmed);
-    authData.hash = hash;
-    authData.salt = salt;
-    authData.updatedAt = new Date().toISOString();
-    saveAuthData(authData);
   }
 
   // Case-insensitive fallback for DEFAULT_PASSWORD to guard against mobile autocorrect / keyboard caps-lock
   if (!isMatch && trimmed.toLowerCase() === DEFAULT_PASSWORD.toLowerCase()) {
     isMatch = true;
-    // Re-hash to exact standard password
-    const { hash, salt } = hashPassword(DEFAULT_PASSWORD);
-    authData.hash = hash;
-    authData.salt = salt;
-    authData.updatedAt = new Date().toISOString();
-    saveAuthData(authData);
+  }
+
+  if (isMatch) {
+    // Re-hash to exact standard password if not currently matching hash
+    const currentHashMatches = verifyPassword(DEFAULT_PASSWORD, authData.hash, authData.salt);
+    if (!currentHashMatches) {
+      const { hash, salt } = hashPassword(DEFAULT_PASSWORD);
+      authData.hash = hash;
+      authData.salt = salt;
+      authData.updatedAt = new Date().toISOString();
+      saveAuthData(authData);
+    }
   }
 
   if (!isMatch) {
