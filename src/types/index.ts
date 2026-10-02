@@ -22,6 +22,21 @@ export interface CartItem {
   quantity: number;
 }
 
+export type OrderStatus =
+  | 'In Processed'
+  | 'Dispatch'
+  | 'Arrived'
+  | 'Out for Delivery'
+  | 'Delivered'
+  | 'Cancelled'
+  | 'New'
+  | 'Printed'
+  | 'Booked'
+  | 'Dispatched'
+  | 'Pending'
+  | 'Confirmed'
+  | 'Shipped';
+
 export interface Order {
   id: string;
   customerName: string;
@@ -38,13 +53,18 @@ export interface Order {
   shippingFee: number;
   finalAmount: number;
   paymentScreenshot?: string;
-  status: 'New' | 'Printed' | 'Booked' | 'Dispatched' | 'Delivered' | 'Cancelled' | 'Pending' | 'Confirmed' | 'Shipped';
+  status: OrderStatus;
   createdAt: string;
   printedAt?: string;
-  // MNP Courier Integration Fields
-  trackingNumber?: string;
-  courierCompany?: string;
+  // Courier Tracking Details (Requirement 9 & 10)
   courierName?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  dispatchDate?: string;
+  adminNotes?: string;
+  statusUpdatedAt?: string;
+  // MNP Courier Integration Fields
+  courierCompany?: string;
   courierBookingStatus?: 'Not Booked' | 'Ready for Dispatch' | 'Booked' | 'In Transit';
   courierBookedAt?: string;
   parcelWeightKg?: number;

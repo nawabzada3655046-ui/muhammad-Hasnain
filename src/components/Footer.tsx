@@ -17,6 +17,7 @@ interface FooterProps {
   onScrollToSection: (sectionId: string) => void;
   onOpenPrivacy: () => void;
   onOpenTerms: () => void;
+  onOpenMyOrder?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
@@ -24,6 +25,7 @@ export const Footer: React.FC<FooterProps> = ({
   onScrollToSection,
   onOpenPrivacy,
   onOpenTerms,
+  onOpenMyOrder,
 }) => {
   return (
     <footer id="contact" className="bg-gray-100 border-t border-gray-200 text-gray-700">
@@ -275,14 +277,23 @@ export const Footer: React.FC<FooterProps> = ({
                 </a>
               </li>
               <li>
-                <a 
-                  href={getGeneralWhatsAppUrl('Assalam-o-Alaikum, I want to track my order.')}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-amber-700 transition-colors"
-                >
-                  Track Your Order
-                </a>
+                {onOpenMyOrder ? (
+                  <button
+                    onClick={onOpenMyOrder}
+                    className="hover:text-amber-700 transition-colors text-left cursor-pointer"
+                  >
+                    Track Your Order (My Order)
+                  </button>
+                ) : (
+                  <a 
+                    href={getGeneralWhatsAppUrl('Assalam-o-Alaikum, I want to track my order.')}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-amber-700 transition-colors"
+                  >
+                    Track Your Order
+                  </a>
+                )}
               </li>
               <li>
                 <a 

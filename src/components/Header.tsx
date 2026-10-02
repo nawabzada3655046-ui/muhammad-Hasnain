@@ -6,7 +6,8 @@ import {
   X, 
   MessageCircle, 
   Sparkles,
-  Lock
+  Lock,
+  PackageCheck
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { STORE_WHATSAPP_NUMBER, getGeneralWhatsAppUrl } from '../utils/whatsapp';
@@ -18,6 +19,7 @@ interface HeaderProps {
   onOpenAdmin: () => void;
   onNavigateCategory: (category: string) => void;
   onScrollToSection: (sectionId: string) => void;
+  onOpenMyOrder: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAdmin,
   onNavigateCategory,
   onScrollToSection,
+  onOpenMyOrder,
 }) => {
   const { cart, searchQuery, setSearchQuery, isAdmin } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -129,6 +132,14 @@ export const Header: React.FC<HeaderProps> = ({
               className="hover:text-amber-600 transition-colors py-1 hover:border-b-2 hover:border-amber-600 font-medium"
             >
               Contact
+            </button>
+            <button 
+              onClick={onOpenMyOrder}
+              className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs shadow-2xs hover:scale-105 transition-all cursor-pointer"
+              title="Lookup your order status & tracking"
+            >
+              <PackageCheck className="w-3.5 h-3.5 text-amber-700" />
+              <span>My Order</span>
             </button>
           </nav>
 
@@ -269,6 +280,21 @@ export const Header: React.FC<HeaderProps> = ({
               className="text-left py-2 px-3 rounded-lg hover:bg-amber-50 hover:text-amber-700"
             >
               Contact & Store Location
+            </button>
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenMyOrder();
+              }}
+              className="text-left py-2.5 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 font-bold flex items-center justify-between transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <PackageCheck className="w-4 h-4 text-amber-700" />
+                <span>My Order & Live Tracking</span>
+              </div>
+              <span className="text-[10px] bg-amber-500 text-white font-extrabold px-2 py-0.5 rounded-full uppercase">
+                Track
+              </span>
             </button>
           </div>
 

@@ -27,6 +27,20 @@ if (!fs.existsSync(DATA_DIR)) {
 
 export const PRODUCTS_FILE = path.join(DATA_DIR, 'products_db.json');
 export const CATEGORIES_FILE = path.join(DATA_DIR, 'categories_db.json');
+export const ORDERS_FILE = path.join(DATA_DIR, 'orders_db.json');
+
+// Helper to normalize phone numbers for customer order lookup
+export function normalizePhoneNumber(phone: string): string {
+  if (!phone || typeof phone !== 'string') return '';
+  let digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('92') && digits.length >= 11) {
+    digits = digits.substring(2);
+  }
+  if (digits.startsWith('0')) {
+    digits = digits.substring(1);
+  }
+  return digits;
+}
 
 // Helper to safely read JSON file
 export function readJsonFile<T>(filePath: string, fallback: T): T {
@@ -395,6 +409,286 @@ export function createApiMiddleware() {
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, categories: filtered }));
         return;
+      }
+
+      // 6. /api/orders/lookup (POST - Public "My Order" verification)
+      if (url === '/api/orders/lookup' && method === 'POST') {
+        const body = await parseBody(req);
+        const { orderId, contactNumber } = body || {};
+        if (!orderId || typeof orderId !== 'string' || !contactNumber || typeof contactNumber !== 'string') {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Order ID and Contact Phone Number are both required.' }));
+          return;
+        }
+
+        const cleanOrderId = orderId.trim().toUpperCase().replace(/^#/, '');
+        const cleanPhone = normalizePhoneNumber(contactNumber);
+
+        if (!cleanOrderId || !cleanPhone) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Please enter a valid Order ID and Contact Phone Number.' }));
+          return;
+        }
+
+        const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+        const matchingOrder = orders.find((o) => {
+          const oId = (o.id || '').trim().toUpperCase().replace(/^#/, '');
+          if (oId !== cleanOrderId) return false;
+          const oPhone1 = normalizePhoneNumber(o.contactNumber || '');
+          const oPhone2 = normalizePhoneNumber(o.whatsappNumber || '');
+          return oPhone1 === cleanPhone || oPhone2 === cleanPhone;
+        });
+
+        if (!matchingOrder) {
+          res.statusCode = 404;
+          res.end(
+            JSON.stringify({
+              error: `No matching order found for Order ID #${cleanOrderId} and the provided phone number. Please verify your details and try again.`,
+            })
+          );
+          return;
+        }
+
+        const safeOrder = { ...matchingOrder };
+        delete safeOrder.adminNotes;
+
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, order: safeOrder }));
+        return;
+      }
+
+      // 7. /api/orders (GET - Admin Only, POST - Public Order Creation)
+      if (url === '/api/orders' || url.startsWith('/api/orders?')) {
+        if (method === 'GET') {
+          if (!checkAdmin()) return;
+          const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+          orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          res.statusCode = 200;
+          res.end(JSON.stringify(orders));
+          return;
+        }
+
+        if (method === 'POST') {
+          const body = await parseBody(req);
+          if (!body) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Order data is required' }));
+            return;
+          }
+
+          const { customerName, contactNumber, address, city, items, paymentMethod } = body;
+
+          if (!customerName || typeof customerName !== 'string' || customerName.trim().length < 2) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Customer full name is required (minimum 2 characters)' }));
+            return;
+          }
+          if (!contactNumber || typeof contactNumber !== 'string' || contactNumber.trim().length < 7) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Valid customer contact number is required' }));
+            return;
+          }
+          if (!address || typeof address !== 'string' || address.trim().length < 3) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Complete delivery address is required' }));
+            return;
+          }
+          if (!city || typeof city !== 'string' || city.trim().length < 2) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Delivery city is required' }));
+            return;
+          }
+          if (!Array.isArray(items) || items.length === 0) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Order must contain at least one item' }));
+            return;
+          }
+
+          let computedSubtotal = 0;
+          for (const item of items) {
+            if (!item.product || typeof item.product.price !== 'number' || typeof item.quantity !== 'number' || item.quantity <= 0) {
+              res.statusCode = 400;
+              res.end(JSON.stringify({ error: 'Invalid product or quantity in order items' }));
+              return;
+            }
+            computedSubtotal += item.product.price * item.quantity;
+          }
+
+          const discount = typeof body.discount === 'number' ? Math.max(0, body.discount) : 0;
+          const shippingFee = typeof body.shippingFee === 'number' ? Math.max(0, body.shippingFee) : 0;
+          const finalAmount = typeof body.finalAmount === 'number' ? body.finalAmount : Math.max(0, computedSubtotal - discount + shippingFee);
+
+          const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+
+          // Duplicate prevention within 5s
+          const cleanPhone = normalizePhoneNumber(contactNumber);
+          const nowTime = Date.now();
+          const duplicateOrder = orders.find((o) => {
+            if (normalizePhoneNumber(o.contactNumber || '') !== cleanPhone) return false;
+            if (o.finalAmount !== finalAmount) return false;
+            const diff = Math.abs(nowTime - new Date(o.createdAt || 0).getTime());
+            return diff < 5000;
+          });
+
+          if (duplicateOrder) {
+            res.statusCode = 200;
+            res.end(JSON.stringify(duplicateOrder));
+            return;
+          }
+
+          const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+          let orderId = body.id && typeof body.id === 'string' && body.id.trim()
+            ? body.id.trim().toUpperCase()
+            : `HZC-${randomSuffix}`;
+
+          if (orders.some((o) => o.id === orderId)) {
+            orderId = `HZC-${Math.floor(1000 + Math.random() * 9000)}`;
+          }
+
+          const validStatuses = ['In Processed', 'Dispatch', 'Arrived', 'Out for Delivery', 'Delivered', 'Cancelled', 'New', 'Printed', 'Booked', 'Dispatched', 'Pending', 'Confirmed', 'Shipped'];
+          const status = validStatuses.includes(body.status) ? body.status : 'In Processed';
+
+          const newOrder = {
+            id: orderId,
+            customerName: customerName.trim(),
+            contactNumber: contactNumber.trim(),
+            whatsappNumber: (body.whatsappNumber || contactNumber).trim(),
+            address: address.trim(),
+            city: city.trim(),
+            postalCode: body.postalCode || '',
+            specialInstructions: body.specialInstructions || '',
+            items,
+            paymentMethod: paymentMethod === 'advance' ? 'advance' : 'cod',
+            subtotal: computedSubtotal,
+            discount,
+            shippingFee,
+            finalAmount,
+            paymentScreenshot: body.paymentScreenshot || null,
+            status,
+            createdAt: body.createdAt || new Date().toISOString(),
+            statusUpdatedAt: new Date().toISOString(),
+            printedAt: body.printedAt || null,
+            courierName: body.courierName || 'M&P Express Logistics',
+            trackingNumber: body.trackingNumber || null,
+            trackingUrl: body.trackingUrl || null,
+            dispatchDate: body.dispatchDate || null,
+            adminNotes: body.adminNotes || null,
+            courierCompany: body.courierCompany || 'M&P Express Logistics',
+            courierBookingStatus: body.courierBookingStatus || 'Not Booked',
+          };
+
+          const updatedOrders = [newOrder, ...orders.filter((o) => o.id !== newOrder.id)];
+          writeJsonFile(ORDERS_FILE, updatedOrders);
+
+          res.statusCode = 201;
+          res.end(JSON.stringify(newOrder));
+          return;
+        }
+      }
+
+      // 8. /api/orders/:id/tracking (PUT - Admin Only)
+      const trackingMatch = url.match(/^\/api\/orders\/([^/?]+)\/tracking/);
+      if (trackingMatch && method === 'PUT') {
+        if (!checkAdmin()) return;
+        const id = decodeURIComponent(trackingMatch[1]);
+        const body = await parseBody(req);
+        const { status, courierName, trackingNumber, trackingUrl, dispatchDate, adminNotes } = body || {};
+
+        const validStatuses = ['In Processed', 'Dispatch', 'Arrived', 'Out for Delivery', 'Delivered', 'Cancelled', 'New', 'Printed', 'Booked', 'Dispatched', 'Pending', 'Confirmed', 'Shipped'];
+        if (status && !validStatuses.includes(status)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Invalid status' }));
+          return;
+        }
+
+        const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+        const index = orders.findIndex((o) => o.id === id);
+
+        if (index === -1) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: 'Order not found' }));
+          return;
+        }
+
+        const current = orders[index];
+        const updatedOrder = {
+          ...current,
+          status: status || current.status,
+          courierName: courierName !== undefined ? courierName : current.courierName,
+          trackingNumber: trackingNumber !== undefined ? trackingNumber : current.trackingNumber,
+          trackingUrl: trackingUrl !== undefined ? trackingUrl : current.trackingUrl,
+          dispatchDate: dispatchDate !== undefined ? dispatchDate : current.dispatchDate,
+          adminNotes: adminNotes !== undefined ? adminNotes : current.adminNotes,
+          statusUpdatedAt: new Date().toISOString(),
+        };
+
+        orders[index] = updatedOrder;
+        writeJsonFile(ORDERS_FILE, orders);
+
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, order: updatedOrder }));
+        return;
+      }
+
+      // 9. /api/orders/:id/status (PUT - Admin Only)
+      const statusMatch = url.match(/^\/api\/orders\/([^/?]+)\/status/);
+      if (statusMatch && method === 'PUT') {
+        if (!checkAdmin()) return;
+        const id = decodeURIComponent(statusMatch[1]);
+        const body = await parseBody(req);
+        const { status, trackingNumber, courierBookingStatus, printedAt } = body || {};
+
+        const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+        const index = orders.findIndex((o) => o.id === id);
+
+        if (index === -1) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: 'Order not found' }));
+          return;
+        }
+
+        if (status) orders[index].status = status;
+        orders[index].statusUpdatedAt = new Date().toISOString();
+        if (trackingNumber !== undefined) orders[index].trackingNumber = trackingNumber;
+        if (courierBookingStatus !== undefined) orders[index].courierBookingStatus = courierBookingStatus;
+        if (printedAt !== undefined) orders[index].printedAt = printedAt;
+
+        writeJsonFile(ORDERS_FILE, orders);
+        res.statusCode = 200;
+        res.end(JSON.stringify(orders[index]));
+        return;
+      }
+
+      // 10. /api/orders/:id (PUT & DELETE - Admin Only)
+      const orderMatch = url.match(/^\/api\/orders\/([^/?]+)/);
+      if (orderMatch && orderMatch[1] && orderMatch[1] !== 'lookup') {
+        const id = decodeURIComponent(orderMatch[1]);
+        const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+
+        if (method === 'PUT') {
+          if (!checkAdmin()) return;
+          const updates = await parseBody(req);
+          const index = orders.findIndex((o) => o.id === id);
+          if (index === -1) {
+            res.statusCode = 404;
+            res.end(JSON.stringify({ error: 'Order not found' }));
+            return;
+          }
+          orders[index] = { ...orders[index], ...updates, id };
+          writeJsonFile(ORDERS_FILE, orders);
+          res.statusCode = 200;
+          res.end(JSON.stringify(orders[index]));
+          return;
+        }
+
+        if (method === 'DELETE') {
+          if (!checkAdmin()) return;
+          const filtered = orders.filter((o) => o.id !== id);
+          writeJsonFile(ORDERS_FILE, filtered);
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, id }));
+          return;
+        }
       }
 
       // Unmatched API endpoint

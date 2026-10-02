@@ -17,11 +17,13 @@ import { CustomerProtectionBadges } from './CustomerProtectionBadges';
 interface OrderConfirmationModalProps {
   order: Order | null;
   onClose: () => void;
+  onOpenMyOrder?: (orderId: string, phone: string) => void;
 }
 
 export const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
   order,
   onClose,
+  onOpenMyOrder,
 }) => {
   // Dynamic 3-Day Delivery Timeline based on the confirmed order date
   const deliveryTimeline = React.useMemo(() => {
@@ -103,11 +105,11 @@ export const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
             <span className="text-xs uppercase tracking-widest text-amber-700 font-bold block pt-1">
               Hasnain Zarri Chappal Store
             </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold font-serif-luxury text-gray-900">
-              Order Received Successfully!
+            <h2 className="text-2xl sm:text-3xl font-extrabold font-serif-luxury text-gray-900 leading-tight">
+              Congratulations! Your Order Has Been Placed Successfully!
             </h2>
             <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto">
-              Shukriya! Your order has been placed. Please notify us on WhatsApp so our craftsmen can start handcrafting and packing your order.
+              Shukriya! Your order <strong className="font-mono text-amber-800">#{order.id}</strong> has been saved successfully in our persistent database. You can track its live status at any time.
             </p>
           </div>
 
@@ -284,20 +286,51 @@ export const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
           {/* Customer Protection Badges */}
           <CustomerProtectionBadges variant="confirmation" />
 
-          {/* WhatsApp Primary Call to Action */}
+          {/* Action Buttons (Requirement 4) */}
           <div className="space-y-3 print:hidden">
+            {/* WhatsApp Contact Button */}
             <button
               onClick={handleWhatsAppNotify}
               className="w-full py-4 px-6 rounded-2xl bg-[#25D366] hover:bg-[#20ba59] text-white font-extrabold text-base flex items-center justify-center gap-3 shadow-lg shadow-green-600/30 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
             >
               <MessageCircle className="w-6 h-6 fill-white" />
-              <span>Confirm on WhatsApp ({STORE_WHATSAPP_NUMBER})</span>
+              <span>Contact Us on WhatsApp ({STORE_WHATSAPP_NUMBER})</span>
             </button>
 
-            <div className="flex items-center justify-between gap-3">
+            {/* My Order & Track My Order Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenMyOrder) {
+                    onOpenMyOrder(order.id, order.contactNumber || order.whatsappNumber);
+                  }
+                }}
+                className="py-3 px-4 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <PackageCheck className="w-4 h-4 text-amber-700" />
+                <span>My Order Details</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenMyOrder) {
+                    onOpenMyOrder(order.id, order.contactNumber || order.whatsappNumber);
+                  }
+                }}
+                className="py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-white text-xs font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Truck className="w-4 h-4" />
+                <span>Track My Order Live</span>
+              </button>
+            </div>
+
+            {/* Print & Continue Shopping */}
+            <div className="flex items-center justify-between gap-3 pt-1">
               <button
                 onClick={handlePrint}
-                className="py-2.5 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 text-xs font-semibold flex items-center gap-2 transition-colors"
+                className="py-2.5 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Invoice</span>
@@ -305,7 +338,7 @@ export const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
 
               <button
                 onClick={onClose}
-                className="py-2.5 px-6 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
+                className="py-2.5 px-6 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs cursor-pointer"
               >
                 Continue Shopping
               </button>

@@ -15,6 +15,7 @@ import { WhatsAppCTA } from './components/WhatsAppCTA';
 import { Footer } from './components/Footer';
 import { PolicyModals } from './components/PolicyModals';
 import { AdminDashboard } from './components/Admin/AdminDashboard';
+import { MyOrderModal } from './components/MyOrderModal';
 import { Product, Order } from './types';
 import { Sparkles, ChevronRight, PackageCheck } from 'lucide-react';
 
@@ -36,6 +37,9 @@ function StoreMain() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [myOrderOpen, setMyOrderOpen] = useState(false);
+  const [myOrderInitialId, setMyOrderInitialId] = useState('');
+  const [myOrderInitialPhone, setMyOrderInitialPhone] = useState('');
   const [policyType, setPolicyType] = useState<'privacy' | 'terms' | null>(null);
 
   // Pagination for unlimited products
@@ -130,6 +134,11 @@ function StoreMain() {
         onOpenAdmin={() => setAdminOpen(true)}
         onNavigateCategory={handleNavigateCategory}
         onScrollToSection={handleScrollToSection}
+        onOpenMyOrder={() => {
+          setMyOrderInitialId('');
+          setMyOrderInitialPhone('');
+          setMyOrderOpen(true);
+        }}
       />
 
       <main className="flex-1 space-y-2">
@@ -401,6 +410,11 @@ function StoreMain() {
         onScrollToSection={handleScrollToSection}
         onOpenPrivacy={() => setPolicyType('privacy')}
         onOpenTerms={() => setPolicyType('terms')}
+        onOpenMyOrder={() => {
+          setMyOrderInitialId('');
+          setMyOrderInitialPhone('');
+          setMyOrderOpen(true);
+        }}
       />
 
       {/* PRODUCT DETAIL MODAL */}
@@ -442,6 +456,20 @@ function StoreMain() {
       <OrderConfirmationModal
         order={confirmedOrder}
         onClose={() => setConfirmedOrder(null)}
+        onOpenMyOrder={(orderId, phone) => {
+          setConfirmedOrder(null);
+          setMyOrderInitialId(orderId);
+          setMyOrderInitialPhone(phone);
+          setMyOrderOpen(true);
+        }}
+      />
+
+      {/* MY ORDER & COURIER TRACKING LOOKUP MODAL */}
+      <MyOrderModal
+        isOpen={myOrderOpen}
+        onClose={() => setMyOrderOpen(false)}
+        initialOrderId={myOrderInitialId}
+        initialPhone={myOrderInitialPhone}
       />
 
       {/* ADMIN DASHBOARD PORTAL */}

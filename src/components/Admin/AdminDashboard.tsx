@@ -32,13 +32,20 @@ import {
   ArrowLeft,
   AlertCircle,
   Info,
-  RefreshCw
+  RefreshCw,
+  Printer,
+  Download,
+  FileText,
+  QrCode,
+  PackagePlus
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { Product, Order } from '../../types';
 import { STORE_WHATSAPP_NUMBER, getCustomerStatusWhatsAppUrl } from '../../utils/whatsapp';
 import { MNPCourierIntegration } from './MNPCourierIntegration';
 import { MNPShipmentModal } from './MNPShipmentModal';
+import { ShippingLabelModal } from './ShippingLabelModal';
+import { ManualWhatsAppOrderModal } from './ManualWhatsAppOrderModal';
 import { AdminSecuritySettings } from './AdminSecuritySettings';
 import { optimizeImage } from '../../utils/imageOptimizer';
 import { TIKTOK_PROFILE_URL } from '../../utils/socialLinks';
@@ -77,6 +84,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     verifyPasswordResetOTP,
     resetAdminPassword,
     getRecoveryStatus,
+    getAuthHeaders,
+    refreshOrders,
   } = useStore();
 
   const [passwordInput, setPasswordInput] = useState('');
@@ -109,6 +118,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   // MNP Courier shipment booking state
   const [bookingOrder, setBookingOrder] = useState<Order | null>(null);
   const [copiedTracking, setCopiedTracking] = useState(false);
+
+  // Store-Branded Courier Shipping Label State
+  const [shippingLabelOrder, setShippingLabelOrder] = useState<Order | null>(null);
+  const [shippingLabelMode, setShippingLabelMode] = useState<'preview' | 'edit'>('preview');
+  const [manualOrderModalOpen, setManualOrderModalOpen] = useState(false);
 
   // Product form modal state
   const [productModalOpen, setProductModalOpen] = useState(false);
@@ -250,6 +264,69 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
       setRecoveryError(err.message || 'Network error resetting password.');
     } finally {
       setRecoveryLoading(false);
+    }
+  };
+
+  // Handler to load and generate the exact Sample Test Order from Requirement 8
+  const handleCreateTestSampleOrder = async () => {
+    try {
+      const testPayload = {
+        customerName: 'Muhammad Hasnain',
+        contactNumber: '03432782295',
+        whatsappNumber: '03432782295',
+        address: 'House #12, Street 4, Sector G-9/1, Near Zarri Market',
+        city: 'Peshawar',
+        postalCode: '25000',
+        items: [
+          {
+            product: {
+              id: 'hzc-sample-kolapuri-red',
+              title: 'Premium Red Kolapuri Chappal',
+              price: 1999,
+              category: "Men's Chappal",
+              sizes: ['8'],
+              stockStatus: 'in_stock',
+              description: 'Pure Leather Traditional Red Kolapuri Chappal with Zarri Embroidery',
+              images: ['https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=800&auto=format&fit=crop&q=80'],
+              isFeatured: true,
+              isNewArrival: true,
+              inRunningBanner: true,
+              isActive: true,
+            },
+            quantity: 1,
+            selectedSize: '8',
+          },
+        ],
+        subtotal: 1999,
+        discount: 0,
+        shippingFee: 0,
+        finalAmount: 1999,
+        paymentMethod: 'cod',
+        courierName: 'M&P Express Logistics',
+        trackingNumber: null,
+        courierBookingStatus: 'Not Booked',
+        specialInstructions: 'Handle with Care - Open & Inspect allowed before payment',
+        adminNotes: 'Sample Test Order for Courier Airway Bill Verification (Requirement 8)',
+        status: 'In Processed',
+      };
+
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(testPayload),
+      });
+
+      const newOrder = await res.json();
+      if (res.ok) {
+        await refreshOrders();
+        setShippingLabelOrder(newOrder);
+        setShippingLabelMode('preview');
+      }
+    } catch (e) {
+      console.error('Error creating sample test order:', e);
     }
   };
 
@@ -1415,6 +1492,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                   </div>
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setManualOrderModalOpen(true)}
+                      className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>+ Manual WhatsApp Order</span>
+                    </button>
+
                     <span className="text-xs text-gray-500">Status:</span>
                     <select
                       value={orderStatusFilter}
@@ -1594,6 +1680,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 
+                                {/* Store Courier Shipping Airway Bill Label (A6) */}
+                                <button
+                                  onClick={() => {
+                                    setShippingLabelOrder(ord);
+                                    setShippingLabelMode('preview');
+                                  }}
+                                  className="p-1.5 rounded-lg bg-black hover:bg-amber-600 text-white transition-colors cursor-pointer"
+                                  title="Courier Shipping Label (A6 Airway Bill)"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
+
                                 {/* MNP Courier Booking Shortcut */}
                                 <button
                                   onClick={() => setBookingOrder(ord)}
@@ -2289,6 +2387,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     </button>
                   </div>
                 )}
+
+                {/* Store Courier Airway Bill Label Action */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3.5 bg-neutral-950 text-white rounded-xl border border-neutral-800 shadow-xs">
+                  <div>
+                    <span className="text-xs font-bold text-amber-400 block font-serif-luxury">
+                      Store Courier Airway Bill (A6 Shipping Label)
+                    </span>
+                    <span className="text-[11px] text-gray-300">
+                      Standard courier airway bill • Top/Bottom barcodes, QR code, COD details & return branch
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShippingLabelOrder(viewingOrder);
+                        setShippingLabelMode('edit');
+                      }}
+                      className="py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-gray-200 text-xs font-bold border border-neutral-700 transition-colors cursor-pointer"
+                    >
+                      <span>Edit Fields</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShippingLabelOrder(viewingOrder);
+                        setShippingLabelMode('preview');
+                      }}
+                      className="py-2 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print Label (A6)</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Items */}
@@ -2393,6 +2527,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
               mnpShipment: booking,
             } : null);
           }
+        }}
+      />
+
+      {/* MODAL: STORE-BRANDED COURIER AIRWAY BILL LABEL (100x150mm & A6) */}
+      {shippingLabelOrder && (
+        <ShippingLabelModal
+          order={shippingLabelOrder}
+          isOpen={Boolean(shippingLabelOrder)}
+          onClose={() => setShippingLabelOrder(null)}
+          initialMode={shippingLabelMode}
+        />
+      )}
+
+      {/* MODAL: MANUAL WHATSAPP ORDER ENTRY */}
+      <ManualWhatsAppOrderModal
+        isOpen={manualOrderModalOpen}
+        onClose={() => setManualOrderModalOpen(false)}
+        onOrderCreated={(newOrder) => {
+          setShippingLabelOrder(newOrder);
+          setShippingLabelMode('preview');
         }}
       />
 

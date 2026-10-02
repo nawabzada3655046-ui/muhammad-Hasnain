@@ -288,7 +288,59 @@ app.delete('/api/categories/:name', verifyAdminMiddleware, (req, res) => {
   res.json({ success: true, categories: filtered });
 });
 
+// Helper to normalize phone numbers for customer order lookup
+function normalizePhoneNumber(phone: string): string {
+  if (!phone || typeof phone !== 'string') return '';
+  let digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('92') && digits.length >= 11) {
+    digits = digits.substring(2);
+  }
+  if (digits.startsWith('0')) {
+    digits = digits.substring(1);
+  }
+  return digits;
+}
+
 // --- ORDERS API (Persistent Database with Validation & Security) ---
+
+// POST lookup customer order (Public "My Order" verification)
+app.post('/api/orders/lookup', (req, res) => {
+  const { orderId, contactNumber } = req.body || {};
+  if (!orderId || typeof orderId !== 'string' || !contactNumber || typeof contactNumber !== 'string') {
+    return res.status(400).json({ error: 'Order ID and Contact Phone Number are both required.' });
+  }
+
+  const cleanOrderId = orderId.trim().toUpperCase().replace(/^#/, '');
+  const cleanPhone = normalizePhoneNumber(contactNumber);
+
+  if (!cleanOrderId || !cleanPhone) {
+    return res.status(400).json({ error: 'Please enter a valid Order ID and Contact Phone Number.' });
+  }
+
+  const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+  
+  // Find order matching ID and phone number securely
+  const matchingOrder = orders.find((o) => {
+    const oId = (o.id || '').trim().toUpperCase().replace(/^#/, '');
+    if (oId !== cleanOrderId) return false;
+
+    const oPhone1 = normalizePhoneNumber(o.contactNumber || '');
+    const oPhone2 = normalizePhoneNumber(o.whatsappNumber || '');
+    return oPhone1 === cleanPhone || oPhone2 === cleanPhone;
+  });
+
+  if (!matchingOrder) {
+    return res.status(404).json({
+      error: `No matching order found for Order ID #${cleanOrderId} and the provided phone number. Please verify your details and try again.`,
+    });
+  }
+
+  // Never expose private internal admin notes to customer (Requirement 13)
+  const safeOrder = { ...matchingOrder };
+  delete safeOrder.adminNotes;
+
+  return res.json({ success: true, order: safeOrder });
+});
 
 // GET all orders (Admin only, newest first)
 app.get('/api/orders', verifyAdminMiddleware, (req, res) => {
@@ -298,7 +350,7 @@ app.get('/api/orders', verifyAdminMiddleware, (req, res) => {
   res.json(orders);
 });
 
-// POST create order (Public checkout with strict validation)
+// POST create order (Public checkout with strict validation & duplicate prevention)
 app.post('/api/orders', (req, res) => {
   const body = req.body;
   if (!body) {
@@ -337,14 +389,35 @@ app.post('/api/orders', (req, res) => {
   const shippingFee = typeof body.shippingFee === 'number' ? Math.max(0, body.shippingFee) : 0;
   const finalAmount = typeof body.finalAmount === 'number' ? body.finalAmount : Math.max(0, computedSubtotal - discount + shippingFee);
 
+  const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+
+  // Prevent accidental duplicate order within 5 seconds for same customer & finalAmount
+  const cleanPhone = normalizePhoneNumber(contactNumber);
+  const nowTime = Date.now();
+  const duplicateOrder = orders.find((o) => {
+    if (normalizePhoneNumber(o.contactNumber || '') !== cleanPhone) return false;
+    if (o.finalAmount !== finalAmount) return false;
+    const diff = Math.abs(nowTime - new Date(o.createdAt || 0).getTime());
+    return diff < 5000;
+  });
+
+  if (duplicateOrder) {
+    return res.status(200).json(duplicateOrder);
+  }
+
   // Generate unique Order ID if not supplied
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const orderId = body.id && typeof body.id === 'string' && body.id.trim()
-    ? body.id.trim()
+  let orderId = body.id && typeof body.id === 'string' && body.id.trim()
+    ? body.id.trim().toUpperCase()
     : `HZC-${randomSuffix}`;
 
-  const validStatuses = ['New', 'Printed', 'Booked', 'Dispatched', 'Delivered', 'Cancelled', 'Pending', 'Confirmed', 'Shipped'];
-  const status = validStatuses.includes(body.status) ? body.status : 'New';
+  // Ensure collision-free
+  if (orders.some((o) => o.id === orderId)) {
+    orderId = `HZC-${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+
+  const validStatuses = ['In Processed', 'Dispatch', 'Arrived', 'Out for Delivery', 'Delivered', 'Cancelled', 'New', 'Printed', 'Booked', 'Dispatched', 'Pending', 'Confirmed', 'Shipped'];
+  const status = validStatuses.includes(body.status) ? body.status : 'In Processed';
 
   const newOrder = {
     id: orderId,
@@ -364,13 +437,17 @@ app.post('/api/orders', (req, res) => {
     paymentScreenshot: body.paymentScreenshot || null,
     status,
     createdAt: body.createdAt || new Date().toISOString(),
+    statusUpdatedAt: new Date().toISOString(),
     printedAt: body.printedAt || null,
+    courierName: body.courierName || 'M&P Express Logistics',
     trackingNumber: body.trackingNumber || null,
+    trackingUrl: body.trackingUrl || null,
+    dispatchDate: body.dispatchDate || null,
+    adminNotes: body.adminNotes || null,
     courierCompany: body.courierCompany || 'M&P Express Logistics',
     courierBookingStatus: body.courierBookingStatus || 'Not Booked',
   };
 
-  const orders = readJsonFile<any[]>(ORDERS_FILE, []);
   // Insert at beginning (newest first)
   const updatedOrders = [newOrder, ...orders.filter((o) => o.id !== newOrder.id)];
   writeJsonFile(ORDERS_FILE, updatedOrders);
@@ -378,14 +455,49 @@ app.post('/api/orders', (req, res) => {
   res.status(201).json(newOrder);
 });
 
+// PUT update courier tracking and status (Requirement 9 & 10)
+app.put('/api/orders/:id/tracking', verifyAdminMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { status, courierName, trackingNumber, trackingUrl, dispatchDate, adminNotes } = req.body || {};
+
+  const validStatuses = ['In Processed', 'Dispatch', 'Arrived', 'Out for Delivery', 'Delivered', 'Cancelled', 'New', 'Printed', 'Booked', 'Dispatched', 'Pending', 'Confirmed', 'Shipped'];
+  if (status && !validStatuses.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: In Processed, Dispatch, Arrived, Out for Delivery, Delivered, Cancelled` });
+  }
+
+  const orders = readJsonFile<any[]>(ORDERS_FILE, []);
+  const index = orders.findIndex((o) => o.id === id);
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+
+  const current = orders[index];
+  const updatedOrder = {
+    ...current,
+    status: status || current.status,
+    courierName: courierName !== undefined ? courierName : current.courierName,
+    trackingNumber: trackingNumber !== undefined ? trackingNumber : current.trackingNumber,
+    trackingUrl: trackingUrl !== undefined ? trackingUrl : current.trackingUrl,
+    dispatchDate: dispatchDate !== undefined ? dispatchDate : current.dispatchDate,
+    adminNotes: adminNotes !== undefined ? adminNotes : current.adminNotes,
+    statusUpdatedAt: new Date().toISOString(),
+  };
+
+  orders[index] = updatedOrder;
+  writeJsonFile(ORDERS_FILE, orders);
+
+  res.json({ success: true, order: updatedOrder });
+});
+
 // PUT update order status
 app.put('/api/orders/:id/status', verifyAdminMiddleware, (req, res) => {
   const { id } = req.params;
   const { status, trackingNumber, courierBookingStatus, printedAt } = req.body;
 
-  const validStatuses = ['New', 'Printed', 'Booked', 'Dispatched', 'Delivered', 'Cancelled', 'Pending', 'Confirmed', 'Shipped'];
+  const validStatuses = ['In Processed', 'Dispatch', 'Arrived', 'Out for Delivery', 'Delivered', 'Cancelled', 'New', 'Printed', 'Booked', 'Dispatched', 'Pending', 'Confirmed', 'Shipped'];
   if (!status || !validStatuses.includes(status)) {
-    return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    return res.status(400).json({ error: `Invalid status. Must be one of: In Processed, Dispatch, Arrived, Out for Delivery, Delivered, Cancelled` });
   }
 
   const orders = readJsonFile<any[]>(ORDERS_FILE, []);
@@ -396,6 +508,7 @@ app.put('/api/orders/:id/status', verifyAdminMiddleware, (req, res) => {
   }
 
   orders[index].status = status;
+  orders[index].statusUpdatedAt = new Date().toISOString();
   if (status === 'Printed' && !orders[index].printedAt) {
     orders[index].printedAt = printedAt || new Date().toISOString();
   }

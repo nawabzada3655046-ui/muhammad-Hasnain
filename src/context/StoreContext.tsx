@@ -63,6 +63,7 @@ interface StoreContextType {
   verifyPasswordResetOTP: (email: string, otp: string) => Promise<{ success: boolean; resetToken?: string; error?: string }>;
   resetAdminPassword: (email: string, otp: string, newPassword: string, resetToken?: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   getRecoveryStatus: () => Promise<{ registeredEmail: string; requiredPostResetPassword: string; emailDelivery: any }>;
+  getAuthHeaders: () => Record<string, string>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -931,6 +932,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         requestPasswordResetOTP,
         verifyPasswordResetOTP,
         resetAdminPassword,
+        getAuthHeaders,
       }}
     >
       {children}
